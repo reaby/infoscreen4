@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Trash2, Copy } from "lucide-react";
 
 interface Props {
@@ -10,20 +10,23 @@ interface Props {
 }
 
 export default function SlidePickerModal({ bundle, onSelect, onClose }: Props) {
+    const defer = (fn: () => void) => queueMicrotask(fn);
     const [slides, setSlides] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-    const loadSlides = () => {
+    const loadSlides = useCallback(() => {
         setLoading(true);
         fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides`)
             .then((r) => r.json())
             .then((data) => { setSlides(Array.isArray(data) ? data : []); })
             .catch(() => setSlides([]))
             .finally(() => setLoading(false));
-    };
+    }, [bundle]);
 
-    useEffect(() => { loadSlides(); }, [bundle]);
+    useEffect(() => {
+        defer(loadSlides);
+    }, [loadSlides]);
 
     const handleDelete = async (name: string) => {
         await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`, {

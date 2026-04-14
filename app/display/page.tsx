@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSocket } from "../hooks/useSocket";
 import { BundleMeta } from "../interfaces/BundleMeta";
@@ -8,13 +8,22 @@ import { BundleMeta } from "../interfaces/BundleMeta";
 const DisplaySlide = dynamic(() => import("../components/DisplaySlide"), { ssr: false });
 
 export default function DisplayPage() {
+    const defer = (fn: () => void) => queueMicrotask(fn);
     const { state, bundleMetaUpdate } = useSocket("display");
     const [displayJson, setDisplayJson] = useState<object | null>(null);
     const [bundleMeta, setBundleMeta] = useState<BundleMeta>({});
+    const loadSeqRef = useRef(0);
 
     useEffect(() => {
         const active = state.activeSlide;
-        if (!active) { setDisplayJson(null); setBundleMeta({}); return; }
+        if (!active) {
+            defer(() => {
+                setDisplayJson(null);
+                setBundleMeta({});
+            });
+            return;
+        }
+        const seq = ++loadSeqRef.current;
 
         // Fetch bundle meta and slide JSON in parallel
         Promise.all([
@@ -23,8 +32,12 @@ export default function DisplayPage() {
             fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
                 .then((r) => r.json()).catch(() => null),
         ]).then(([meta, json]) => {
+            if (loadSeqRef.current !== seq) return;
             setBundleMeta(meta ?? {});
-            setDisplayJson(json);
+            // Keep the previous rendered slide if the new fetch fails transiently.
+            if (json) {
+                setDisplayJson(json);
+            }
         });
     }, [state.activeSlide]);
 
@@ -33,7 +46,7 @@ export default function DisplayPage() {
         if (!bundleMetaUpdate) return;
         const active = state.activeSlide;
         if (!active || active.bundle !== bundleMetaUpdate.bundle) return;
-        setBundleMeta(bundleMetaUpdate.meta as BundleMeta);
+        defer(() => setBundleMeta(bundleMetaUpdate.meta as BundleMeta));
     }, [bundleMetaUpdate, state.activeSlide]);
 
     return (

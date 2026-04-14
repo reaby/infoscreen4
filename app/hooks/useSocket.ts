@@ -35,7 +35,12 @@ export function useSocket(role: SocketRole) {
     const [bundleMetaUpdate, setBundleMetaUpdate] = useState<BundleMetaUpdate | null>(null);
 
     useEffect(() => {
-        const socket = io({ query: { role } });
+        const socket = io({
+            query: { role },
+            transports: ["websocket", "polling"],
+            upgrade: true,
+            rememberUpgrade: true,
+        });
         socketRef.current = socket;
 
         socket.on("connect", () => setConnected(true));

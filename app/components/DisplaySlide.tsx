@@ -48,7 +48,7 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
             try {
                 c.requestRenderAll();
             } catch {
-                return;
+                // Keep the loop alive; some browsers can throw transiently during media decode.
             }
             fabric.util.requestAnimFrame(render);
         };

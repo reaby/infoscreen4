@@ -23,6 +23,7 @@ const DEFAULT_DURATION = 10;
 const normalizeSlideFile = (value: string) => (value.endsWith(".json") ? value : `${value}.json`);
 
 export default function AdminDashboard() {
+    const defer = (fn: () => void) => queueMicrotask(fn);
     const router = useRouter();
     const { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, bundleMetaUpdate } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
@@ -44,8 +45,14 @@ export default function AdminDashboard() {
         bundleMetaRef.current = bundleMeta;
     }, [bundleMeta]);
 
-    const slides = bundles.find((b) => b.name === selectedBundle)?.slides ?? [];
-    const activeBundleSlides = bundles.find((b) => b.name === state.activeBundle)?.slides ?? [];
+    const slides = useMemo(
+        () => bundles.find((b) => b.name === selectedBundle)?.slides ?? [],
+        [bundles, selectedBundle]
+    );
+    const activeBundleSlides = useMemo(
+        () => bundles.find((b) => b.name === state.activeBundle)?.slides ?? [],
+        [bundles, state.activeBundle]
+    );
     const orderedEntries: BundleSlideEntry[] = useMemo(() => (
         (bundleMeta.slides ?? []).map((entry) => ({
             ...entry,
@@ -65,8 +72,9 @@ export default function AdminDashboard() {
     const isSlideDurationDirty = selectedSlide !== null && slideDurationDraft !== savedSlideDurationDraft;
 
     useEffect(() => {
-        if (!selectedSlide) { setSlideDurationDraft(""); return; }
-        setSlideDurationDraft(savedSlideDurationDraft);
+        defer(() => {
+            setSlideDurationDraft(selectedSlide ? savedSlideDurationDraft : "");
+        });
     }, [selectedSlide, savedSlideDurationDraft]);
 
     const loadBundles = useCallback(async () => {
@@ -83,11 +91,19 @@ export default function AdminDashboard() {
     }, [selectedBundle]);
 
 
-    useEffect(() => { loadBundles(); }, [loadBundles]);
+    useEffect(() => {
+        defer(() => { void loadBundles(); });
+    }, [loadBundles]);
 
     // Load bundle metadata when selected bundle changes
     useEffect(() => {
-        if (!selectedBundle) { setBundleMeta({}); return; }
+        if (!selectedBundle) {
+            defer(() => {
+                setBundleMeta({});
+                setMetaDraft({});
+            });
+            return;
+        }
         fetch(`/api/bundles/${encodeURIComponent(selectedBundle)}`)
             .then((r) => r.json())
             .then((m) => { setBundleMeta(m ?? {}); setMetaDraft(m ?? {}); })
@@ -115,7 +131,13 @@ export default function AdminDashboard() {
     // Fetch live JSON + live bundle metadata whenever the active broadcast slide changes
     useEffect(() => {
         const active = state.activeSlide;
-        if (!active) { setLiveJson(null); setLiveBundleMeta({}); return; }
+        if (!active) {
+            defer(() => {
+                setLiveJson(null);
+                setLiveBundleMeta({});
+            });
+            return;
+        }
         Promise.all([
             fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
                 .then((r) => r.json()).catch(() => ({})),
@@ -132,13 +154,19 @@ export default function AdminDashboard() {
         if (!bundleMetaUpdate) return;
         const active = state.activeSlide;
         if (!active || active.bundle !== bundleMetaUpdate.bundle) return;
-        setLiveBundleMeta(bundleMetaUpdate.meta as BundleMeta);
+        defer(() => setLiveBundleMeta(bundleMetaUpdate.meta as BundleMeta));
     }, [bundleMetaUpdate, state.activeSlide]);
 
     // Load slide JSON for preview whenever selection changes
     useEffect(() => {
-        if (!selectedBundle || !selectedSlide) { setPreviewJson(null); return; }
-        setLoadingPreview(true);
+        if (!selectedBundle || !selectedSlide) {
+            defer(() => {
+                setPreviewJson(null);
+                setLoadingPreview(false);
+            });
+            return;
+        }
+        defer(() => setLoadingPreview(true));
         fetch(`/api/bundles/${encodeURIComponent(selectedBundle)}/slides/${encodeURIComponent(selectedSlide)}`)
             .then((r) => r.json())
             .then((j) => setPreviewJson(j))
@@ -245,7 +273,8 @@ export default function AdminDashboard() {
             const entry = normalized.get(name) ?? { file: `${name}.json`, active: true };
             if (name !== selectedSlide) return entry;
             if (nextDuration === undefined) {
-                const { duration: _duration, ...rest } = entry;
+                const rest = { ...entry };
+                delete rest.duration;
                 return rest;
             }
             return { ...entry, duration: nextDuration };
