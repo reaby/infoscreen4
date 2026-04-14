@@ -5,6 +5,7 @@ import { bundleManager } from "./app/lib/BundleManager";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
+const hostname = process.env.HOST ?? "0.0.0.0";
 
 // Shared server state
 interface ActiveSlide {
@@ -58,7 +59,7 @@ function stopCycle() {
     if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
 }
 
-const app = next({ dev, turbopack: dev });
+const app = next({ dev, turbopack: dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
@@ -213,7 +214,7 @@ app.prepare().then(() => {
         }
     });
 
-    httpServer.listen(port, () => {
-        console.log(`> Ready on http://localhost:${port} [${dev ? "dev" : "production"}]`);
+    httpServer.listen(port, hostname, () => {
+        console.log(`> Ready on http://${hostname}:${port} [${dev ? "dev" : "production"}]`);
     });
 });
