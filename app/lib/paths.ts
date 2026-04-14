@@ -6,12 +6,6 @@ function getProjectRoot(): string {
         return path.resolve(fromEnv);
     }
 
-    // When started via absolute script path (common on VPS), use that script's directory.
-    const scriptArg = process.argv[1];
-    if (scriptArg && path.isAbsolute(scriptArg)) {
-        return path.dirname(scriptArg);
-    }
-
     return process.cwd();
 }
 

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { readFile, unlink, rename, stat } from "fs/promises";
 import path from "path";
-import { getImagesDir } from "@/app/lib/paths";
 
 const NAME_RE = /^[a-zA-Z0-9._-]+$/;
+const IMAGES_DIR = process.env.INFOSCREEN_DATA_DIR
+    ? path.join(path.resolve(process.env.INFOSCREEN_DATA_DIR), "images")
+    : path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "images");
 
 const MIME: Record<string, string> = {
     jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
@@ -16,10 +18,9 @@ function mimeFor(filename: string) {
 }
 
 function safePath(file: string): string | null {
-    const imagesDir = getImagesDir();
     if (!NAME_RE.test(file)) return null;
-    const resolved = path.resolve(path.join(imagesDir, file));
-    if (!resolved.startsWith(path.resolve(imagesDir))) return null;
+    const resolved = path.resolve(path.join(IMAGES_DIR, file));
+    if (!resolved.startsWith(path.resolve(IMAGES_DIR))) return null;
     return resolved;
 }
 

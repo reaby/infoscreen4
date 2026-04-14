@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env server.ts",
     "build": "next build",
+    "build:webpack": "next build --webpack",
     "start": "NODE_ENV=production tsx --env-file=.env server.ts",
     "lint": "eslint"
   },
