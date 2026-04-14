@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readFile, unlink, rename, stat } from "fs/promises";
+import { readFile, unlink, rename, stat, open } from "fs/promises";
 import path from "path";
 import { getBackgroundsDir } from "@/app/lib/paths";
 
@@ -24,7 +24,7 @@ function safePath(file: string): string | null {
 }
 
 export async function GET(
-    _req: Request,
+    req: Request,
     { params }: { params: Promise<{ file: string }> }
 ) {
     const { file } = await params;
@@ -33,12 +33,53 @@ export async function GET(
 
     try {
         const info = await stat(filePath);
-        const buf = await readFile(filePath);
+        const total = info.size;
         const mime = mimeFor(file);
+
+        // Edge is strict about byte-range video responses; support partial content.
+        const range = req.headers.get("range");
+        if (range && range.startsWith("bytes=")) {
+            const raw = range.replace("bytes=", "");
+            const [startRaw, endRaw] = raw.split("-");
+            const start = Number(startRaw);
+            const end = endRaw ? Number(endRaw) : total - 1;
+
+            if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || end >= total) {
+                return new NextResponse(null, {
+                    status: 416,
+                    headers: {
+                        "Content-Range": `bytes */${total}`,
+                        "Accept-Ranges": "bytes",
+                    },
+                });
+            }
+
+            const chunkSize = end - start + 1;
+            const handle = await open(filePath, "r");
+            try {
+                const chunk = Buffer.alloc(chunkSize);
+                await handle.read(chunk, 0, chunkSize, start);
+                return new NextResponse(chunk, {
+                    status: 206,
+                    headers: {
+                        "Content-Type": mime,
+                        "Content-Length": String(chunkSize),
+                        "Content-Range": `bytes ${start}-${end}/${total}`,
+                        "Accept-Ranges": "bytes",
+                        "Cache-Control": "public, max-age=3600",
+                    },
+                });
+            } finally {
+                await handle.close();
+            }
+        }
+
+        const buf = await readFile(filePath);
         return new NextResponse(buf, {
             headers: {
                 "Content-Type": mime,
                 "Content-Length": String(info.size),
+                "Accept-Ranges": "bytes",
                 "Cache-Control": "public, max-age=3600",
             },
         });

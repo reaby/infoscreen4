@@ -34,3 +34,50 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Environment Variables (VPS)
+
+This project reads runtime settings from environment variables (or `.env` when using the npm scripts).
+
+Copy the example file:
+
+```bash
+cp .env.example .env
+```
+
+Variables:
+
+- `HOST` (default `0.0.0.0`): server bind host. Use `0.0.0.0` on VPS.
+- `PORT` (default `3000`): server bind port.
+- `INFOSCREEN_ROOT` (optional): absolute project root used to resolve `data/`.
+- `INFOSCREEN_DATA_DIR` (optional): absolute data directory; overrides `INFOSCREEN_ROOT`.
+
+Example `.env` for VPS:
+
+```env
+HOST=0.0.0.0
+PORT=3000
+INFOSCREEN_ROOT=/home/reaby/infoscreen4
+# INFOSCREEN_DATA_DIR=/home/reaby/infoscreen4/data
+```
+
+### systemd example
+
+```ini
+[Service]
+WorkingDirectory=/home/reaby/infoscreen4
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=PORT=3000
+Environment=INFOSCREEN_ROOT=/home/reaby/infoscreen4
+ExecStart=/usr/bin/pnpm run start
+Restart=always
+```
+
+### PM2 example
+
+```bash
+pm2 start "pnpm run start" --name infoscreen4 --cwd /home/reaby/infoscreen4 --update-env
+pm2 set pm2:autodump true
+pm2 save
+```
