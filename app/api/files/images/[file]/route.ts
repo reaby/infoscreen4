@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { readFile, unlink, rename, stat } from "fs/promises";
 import path from "path";
+import { getImagesDir } from "@/app/lib/paths";
 
-const IMAGES_DIR = path.join(process.cwd(), "data", "images");
 const NAME_RE = /^[a-zA-Z0-9._-]+$/;
 
 const MIME: Record<string, string> = {
@@ -16,9 +16,10 @@ function mimeFor(filename: string) {
 }
 
 function safePath(file: string): string | null {
+    const imagesDir = getImagesDir();
     if (!NAME_RE.test(file)) return null;
-    const resolved = path.resolve(path.join(IMAGES_DIR, file));
-    if (!resolved.startsWith(path.resolve(IMAGES_DIR))) return null;
+    const resolved = path.resolve(path.join(imagesDir, file));
+    if (!resolved.startsWith(path.resolve(imagesDir))) return null;
     return resolved;
 }
 

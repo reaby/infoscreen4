@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { readdir, writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { getBackgroundsDir } from "@/app/lib/paths";
 
-const BG_DIR = path.join(process.cwd(), "data", "backgrounds");
 const MAX_SIZE = 200 * 1024 * 1024; // 200 MB
 
 export async function GET() {
+    const bgDir = getBackgroundsDir();
     try {
-        await mkdir(BG_DIR, { recursive: true });
-        const files = await readdir(BG_DIR);
+        await mkdir(bgDir, { recursive: true });
+        const files = await readdir(bgDir);
         return NextResponse.json(files.filter((f) => !f.startsWith(".")));
     } catch {
         return NextResponse.json([]);
@@ -16,6 +17,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    const bgDir = getBackgroundsDir();
     const ct = req.headers.get("content-type") ?? "";
     if (!ct.includes("multipart/form-data")) {
         return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
@@ -35,8 +37,8 @@ export async function POST(req: Request) {
     const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, "_");
     if (!safeName) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
 
-    await mkdir(BG_DIR, { recursive: true });
-    const dest = path.join(BG_DIR, safeName);
+    await mkdir(bgDir, { recursive: true });
+    const dest = path.join(bgDir, safeName);
     const buf = Buffer.from(await file.arrayBuffer());
     await writeFile(dest, buf);
     return NextResponse.json({ name: safeName });

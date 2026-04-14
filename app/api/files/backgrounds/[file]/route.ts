@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { readFile, unlink, rename, stat } from "fs/promises";
 import path from "path";
+import { getBackgroundsDir } from "@/app/lib/paths";
 
-const BG_DIR = path.join(process.cwd(), "data", "backgrounds");
 const NAME_RE = /^[a-zA-Z0-9._-]+$/;
 
 const MIME: Record<string, string> = {
@@ -16,9 +16,10 @@ function mimeFor(filename: string) {
 }
 
 function safePath(file: string): string | null {
+    const bgDir = getBackgroundsDir();
     if (!NAME_RE.test(file)) return null;
-    const resolved = path.resolve(path.join(BG_DIR, file));
-    if (!resolved.startsWith(path.resolve(BG_DIR))) return null;
+    const resolved = path.resolve(path.join(bgDir, file));
+    if (!resolved.startsWith(path.resolve(bgDir))) return null;
     return resolved;
 }
 

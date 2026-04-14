@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { readdir, writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { getImagesDir } from "@/app/lib/paths";
 
-const IMAGES_DIR = path.join(process.cwd(), "data", "images");
 const MAX_SIZE = 200 * 1024 * 1024; // 200 MB
 
 export async function GET() {
+    const imagesDir = getImagesDir();
     try {
-        await mkdir(IMAGES_DIR, { recursive: true });
-        const files = await readdir(IMAGES_DIR);
+        await mkdir(imagesDir, { recursive: true });
+        const files = await readdir(imagesDir);
         return NextResponse.json(files.filter((f) => !f.startsWith(".")));
     } catch {
         return NextResponse.json([]);
@@ -16,6 +17,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    const imagesDir = getImagesDir();
     const ct = req.headers.get("content-type") ?? "";
     if (!ct.includes("multipart/form-data")) {
         return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
@@ -34,8 +36,8 @@ export async function POST(req: Request) {
     const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, "_");
     if (!safeName) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
 
-    await mkdir(IMAGES_DIR, { recursive: true });
-    const dest = path.join(IMAGES_DIR, safeName);
+    await mkdir(imagesDir, { recursive: true });
+    const dest = path.join(imagesDir, safeName);
     const buf = Buffer.from(await file.arrayBuffer());
     await writeFile(dest, buf);
     return NextResponse.json({ name: safeName });

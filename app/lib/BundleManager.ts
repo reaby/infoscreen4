@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import type { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
+import { getBundlesDir } from "./paths";
 
 type RawMeta = Record<string, unknown>;
 
@@ -10,11 +11,7 @@ export interface OrderedSlide {
 }
 
 export class BundleManager {
-    private readonly bundlesDir: string;
-
-    constructor(rootDir = process.cwd()) {
-        this.bundlesDir = path.join(rootDir, "data", "bundles");
-    }
+    constructor() {}
 
     getMeta(bundle: string): BundleMeta {
         const raw = this.readRawMeta(bundle);
@@ -90,7 +87,7 @@ export class BundleManager {
     }
 
     private bundleDir(bundle: string): string {
-        return path.join(this.bundlesDir, bundle);
+        return path.join(getBundlesDir(), bundle);
     }
 
     private slidesDir(bundle: string): string {
@@ -119,7 +116,8 @@ export class BundleManager {
 
     private writeMeta(bundle: string, meta: BundleMeta): void {
         mkdirSync(this.bundleDir(bundle), { recursive: true });
-        const { activeSlides: _legacy, ...cleanMeta } = meta;
+        const cleanMeta = { ...meta } as BundleMeta & { activeSlides?: unknown };
+        delete cleanMeta.activeSlides;
         writeFileSync(this.metaPath(bundle), JSON.stringify(cleanMeta, null, 2), "utf8");
     }
 
