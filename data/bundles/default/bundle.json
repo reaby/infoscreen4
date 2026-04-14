@@ -1,0 +1,21 @@
+{
+  "backgroundColor": "#000000",
+  "width": 1280,
+  "height": 720,
+  "autoScale": false,
+  "slides": [
+    {
+      "file": "test.json",
+      "active": true
+    },
+    {
+      "file": "testing2.json",
+      "active": true
+    },
+    {
+      "file": "testing.json",
+      "active": true
+    }
+  ],
+  "backgroundFile": "bg.mp4"
+}

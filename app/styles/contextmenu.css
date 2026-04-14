@@ -1,0 +1,66 @@
+.context-menu {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    min-width: 150px;
+    z-index: 1000;
+}
+
+.context-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    color: #171717;
+    transition: background-color 0.15s;
+}
+
+.context-menu-item:hover {
+    background-color: #f5f5f5;
+}
+
+.context-menu-item:active {
+    background-color: #e5e5e5;
+}
+
+.context-menu-item-danger {
+    color: #ef4444;
+}
+
+.context-menu-item-danger:hover {
+    background-color: #fee2e2;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background-color: #e5e5e5;
+    margin: 4px 0;
+}
+
+.context-menu-submenu-wrapper {
+    position: relative;
+}
+
+.context-menu-submenu-trigger {
+    padding-right: 24px;
+}
+
+.context-menu-submenu {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    margin-left: -4px;
+    min-width: 150px;
+    white-space: nowrap;
+}
