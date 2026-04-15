@@ -13,6 +13,13 @@ const eslintConfig = defineConfig([
         "build/**",
         "next-env.d.ts",
     ]),
-]);
+],
+    [{
+        rules: {
+            // Enable some rules that are disabled by default in eslint-config-next.
+            "@typescript-eslint/no-unused-vars": "off",
+            "@typescript-eslint/no-explicit-any": "off"
+        }
+    }]);
 
 export default eslintConfig;

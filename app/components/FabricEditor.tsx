@@ -1,10 +1,11 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as fabric from "fabric";
 import Toolbar from "./Toolbar";
 import ContextMenu from "./ContextMenu";
+import { loadFabricJsonSafely } from "./fabricLoadHelpers";
 import { FabricVideo } from "./FabricVideo";
 
 export default function FabricEditor({ initialBundle, initialSlide }: { initialBundle?: string; initialSlide?: string }) {
@@ -15,6 +16,9 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
     const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
     const [showBackground, setShowBackground] = useState(false);
     const [bundleBackground, setBundleBackground] = useState<{ color?: string; file?: string }>({});
+    const [missingAssetNoticeCount, setMissingAssetNoticeCount] = useState(0);
+    const [missingAssetNoticeVisible, setMissingAssetNoticeVisible] = useState(false);
+    const missingAssetTimeoutRef = useRef<number | null>(null);
     const panningRef = useRef(false);
     const ctrlModRef = useRef(false);
     const textEditRef = useRef(false);
@@ -29,7 +33,25 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         y: 0,
     });
 
-    const fitToBundle = (targetCanvas: fabric.Canvas) => {
+    const syncBackgroundLayer = useCallback((targetCanvas: fabric.Canvas) => {
+        const layer = bgLayerRef.current;
+        if (!layer) return;
+        const vpt = targetCanvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
+        layer.style.width = `${sizeRef.current.width}px`;
+        layer.style.height = `${sizeRef.current.height}px`;
+        layer.style.transform = `matrix(${vpt[0]}, ${vpt[1]}, ${vpt[2]}, ${vpt[3]}, ${vpt[4]}, ${vpt[5]})`;
+    }, []);
+
+    const resizeCanvasToContainer = useCallback((targetCanvas: fabric.Canvas) => {
+        const container = containerRef.current;
+        if (!container) return;
+        const width = Math.max(1, container.clientWidth);
+        const height = Math.max(1, container.clientHeight);
+        targetCanvas.setDimensions({ width, height });
+        targetCanvas.calcOffset();
+    }, []);
+
+    const fitToBundle = useCallback((targetCanvas: fabric.Canvas) => {
         const viewportWidth = targetCanvas.getWidth();
         const viewportHeight = targetCanvas.getHeight();
         const contentWidth = Math.max(1, sizeRef.current.width);
@@ -42,25 +64,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         targetCanvas.setViewportTransform([fitZoom, 0, 0, fitZoom, offsetX, offsetY]);
         syncBackgroundLayer(targetCanvas);
         targetCanvas.requestRenderAll();
-    };
-
-    const resizeCanvasToContainer = (targetCanvas: fabric.Canvas) => {
-        const container = containerRef.current;
-        if (!container) return;
-        const width = Math.max(1, container.clientWidth);
-        const height = Math.max(1, container.clientHeight);
-        targetCanvas.setDimensions({ width, height });
-        targetCanvas.calcOffset();
-    };
-
-    const syncBackgroundLayer = (targetCanvas: fabric.Canvas) => {
-        const layer = bgLayerRef.current;
-        if (!layer) return;
-        const vpt = targetCanvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
-        layer.style.width = `${sizeRef.current.width}px`;
-        layer.style.height = `${sizeRef.current.height}px`;
-        layer.style.transform = `matrix(${vpt[0]}, ${vpt[1]}, ${vpt[2]}, ${vpt[3]}, ${vpt[4]}, ${vpt[5]})`;
-    };
+    }, [syncBackgroundLayer]);
 
     useEffect(() => {
         if (!canvasRef.current) {
@@ -209,7 +213,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 if (!isRestoringRef.current && historyIndexRef.current > 0) {
                     historyIndexRef.current--;
                     isRestoringRef.current = true;
-                    canvas.loadFromJSON(JSON.parse(historyRef.current[historyIndexRef.current])).then(() => {
+                    loadFabricJsonSafely(canvas, JSON.parse(historyRef.current[historyIndexRef.current])).then(() => {
                         canvas.requestRenderAll();
                         isRestoringRef.current = false;
                     });
@@ -221,7 +225,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 if (!isRestoringRef.current && historyIndexRef.current < historyRef.current.length - 1) {
                     historyIndexRef.current++;
                     isRestoringRef.current = true;
-                    canvas.loadFromJSON(JSON.parse(historyRef.current[historyIndexRef.current])).then(() => {
+                    loadFabricJsonSafely(canvas, JSON.parse(historyRef.current[historyIndexRef.current])).then(() => {
                         canvas.requestRenderAll();
                         isRestoringRef.current = false;
                     });
@@ -335,13 +339,14 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             canvas.off("object:modified", saveSnapshot);
             canvas.dispose();
         };
-    }, []);
+    }, [fitToBundle, resizeCanvasToContainer, syncBackgroundLayer]);
 
     const handleUndo = async () => {
         if (!canvas || isRestoringRef.current || historyIndexRef.current <= 0) return;
         historyIndexRef.current--;
         isRestoringRef.current = true;
-        await canvas.loadFromJSON(JSON.parse(historyRef.current[historyIndexRef.current]));
+        const result = await loadFabricJsonSafely(canvas, JSON.parse(historyRef.current[historyIndexRef.current]));
+        if (result.missingAssets) setMissingAssetNoticeCount((count) => count + 1);
         canvas.requestRenderAll();
         isRestoringRef.current = false;
     };
@@ -350,9 +355,36 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         if (!canvas || isRestoringRef.current || historyIndexRef.current >= historyRef.current.length - 1) return;
         historyIndexRef.current++;
         isRestoringRef.current = true;
-        await canvas.loadFromJSON(JSON.parse(historyRef.current[historyIndexRef.current]));
+        const result = await loadFabricJsonSafely(canvas, JSON.parse(historyRef.current[historyIndexRef.current]));
+        if (result.missingAssets) setMissingAssetNoticeCount((count) => count + 1);
         canvas.requestRenderAll();
         isRestoringRef.current = false;
+    };
+
+    useEffect(() => {
+        if (missingAssetNoticeCount === 0) return;
+        setMissingAssetNoticeVisible(true);
+        if (missingAssetTimeoutRef.current) {
+            window.clearTimeout(missingAssetTimeoutRef.current);
+        }
+        missingAssetTimeoutRef.current = window.setTimeout(() => {
+            setMissingAssetNoticeVisible(false);
+            missingAssetTimeoutRef.current = null;
+        }, 7000);
+        return () => {
+            if (missingAssetTimeoutRef.current) {
+                window.clearTimeout(missingAssetTimeoutRef.current);
+                missingAssetTimeoutRef.current = null;
+            }
+        };
+    }, [missingAssetNoticeCount]);
+
+    const closeMissingAssetNotice = () => {
+        if (missingAssetTimeoutRef.current) {
+            window.clearTimeout(missingAssetTimeoutRef.current);
+            missingAssetTimeoutRef.current = null;
+        }
+        setMissingAssetNoticeVisible(false);
     };
 
     const handleZoomIn = () => {
@@ -409,12 +441,15 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                     setBundleBackground({ color: meta.backgroundColor, file: meta.backgroundFile });
                     if (canvas) fitToBundle(canvas);
                 }}
+                onMissingAssets={(hasMissing) => {
+                    if (hasMissing) setMissingAssetNoticeCount((count) => count + 1);
+                }}
                 showBackground={showBackground}
                 onToggleBackground={() => setShowBackground((v) => !v)}
                 initialBundle={initialBundle}
                 initialSlide={initialSlide}
             />
-            <div ref={containerRef} className="editorAreaContainer">
+            <div ref={containerRef} className="editorAreaContainer" style={{ position: "relative" }}>
                 <div ref={bgLayerRef} className="editor-bg-layer">
                     {!showBackground ? (
                         <div className="editor-bg-checker" />
@@ -448,6 +483,58 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                         }
                     }}
                 />
+                {missingAssetNoticeVisible && (
+                    <div
+                        style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "flex-start",
+                            padding: 16,
+                            zIndex: 20,
+                            pointerEvents: "auto",
+                        }}
+                    >
+                        <div
+                            style={{
+                                maxWidth: 420,
+                                width: "100%",
+                                background: "rgba(220, 38, 38, 0.96)",
+                                border: "1px solid rgba(248, 113, 113, 0.95)",
+                                boxShadow: "0 16px 40px rgba(0,0,0,0.35)",
+                                borderRadius: 16,
+                                padding: "14px 16px 14px 18px",
+                                color: "white",
+                                position: "relative",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                            }}
+                        >
+                            <div style={{ flex: 1, lineHeight: 1.4, fontSize: 14, fontWeight: 500 }}>
+                                Missing image assets were skipped while loading this slide.
+                                The editor content is still available.
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeMissingAssetNotice}
+                                style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "white",
+                                    fontSize: 20,
+                                    lineHeight: 1,
+                                    cursor: "pointer",
+                                    padding: 0,
+                                }}
+                                aria-label="Dismiss missing assets notice"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
             <ContextMenu
                 visible={contextMenu.visible}

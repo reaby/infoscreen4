@@ -34,19 +34,30 @@ export default function AdminDashboard() {
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
 
     useEffect(() => {
-        void fetch("/api/auth")
-            .then((response) => response.json())
-            .then((data) => {
+        const checkAuth = async () => {
+            try {
+                const response = await fetch("/api/auth");
+                const data = await response.json();
                 if (!data.authenticated) {
                     router.replace("/");
                     return;
                 }
                 setCurrentUser(data.username ?? null);
                 setAuthChecked(true);
-            })
-            .catch(() => {
+            } catch {
                 router.replace("/");
-            });
+            }
+        };
+
+        checkAuth();
+        const handlePageShow = () => {
+            checkAuth();
+        };
+
+        window.addEventListener("pageshow", handlePageShow);
+        return () => {
+            window.removeEventListener("pageshow", handlePageShow);
+        };
     }, [router]);
 
     useEffect(() => {
@@ -568,6 +579,7 @@ export default function AdminDashboard() {
                                 json={previewTab === "live" ? liveJson : previewJson}
                                 bundleMeta={previewTab === "live" ? liveBundleMeta : bundleMeta}
                                 autoScale={true}
+                                showMissingAssetWarning={true}
                             />
                         </div>
 

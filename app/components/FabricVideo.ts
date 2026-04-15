@@ -28,7 +28,7 @@ export class FabricVideo extends fabric.FabricImage {
         this.muted = options.muted ?? element.muted;
     }
 
-    // @ts-ignore — Fabric's toObject has a complex generic constraint that TypeScript
+    // @ts-expect-error — Fabric's toObject has a complex generic constraint that TypeScript
     // cannot reconcile across subclasses. Runtime behavior is correct.
     toObject(propertiesToInclude: string[] = []): Record<string, any> {
         return {

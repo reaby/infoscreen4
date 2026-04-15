@@ -17,9 +17,18 @@ export default function Home() {
     const [isRegister, setIsRegister] = useState(false);
     const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [working, setWorking] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        void fetch("/api/auth")
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        fetch("/api/users").then((response) => response.json()).then((data) => {
+            if (data.users === 0) setIsRegister(true);
+        });
+
+        fetch("/api/auth")
             .then((response) => response.json())
             .then((data: ApiResult) => {
                 if (data.authenticated && data.username) {
@@ -92,53 +101,59 @@ export default function Home() {
                 <div className="home-actions">
                     <Link href="/display" className="home-btn home-btn-primary">Display</Link>
                     <Link href="/admin" className="home-btn home-btn-secondary">Admin</Link>
-                    <button className="home-btn" type="button" onClick={handleLogout}>Logout</button>
+
                 </div>
-                {status && <div className={`home-status ${status.type}`}>{status.text}</div>}
+                <button className="home-btn home-btn-outlined" type="button" onClick={handleLogout}>Logout</button>
             </div>
         </main>
     ) : (
         <main className="home-page">
             <div className="home-hero">
                 <h1 className="home-title">Infoscreen<span>4</span></h1>
-                <p className="home-subtitle">Sign in to continue.</p>
-                <form className="auth-form" suppressHydrationWarning onSubmit={handleSubmit}>
-                    <label className="auth-label">
-                        Username
-                        <input
-                            className="auth-input"
-                            type="text"
-                            value={form.username}
-                            onChange={(event) => updateField("username", event.target.value)}
+                <p className="home-subtitle">{isRegister ? "Create account" : "Sign in to continue"}</p>
+
+                {mounted ? (
+                    <form className="auth-form" suppressHydrationWarning onSubmit={handleSubmit}>
+                        <label className="auth-label">
+                            Username
+                            <input
+                                className="auth-input"
+                                type="text"
+                                value={form.username}
+                                onChange={(event) => updateField("username", event.target.value)}
+                                disabled={working}
+                            />
+                        </label>
+                        <label className="auth-label">
+                            Password
+                            <input
+                                className="auth-input"
+                                type="password"
+                                value={form.password}
+                                onChange={(event) => updateField("password", event.target.value)}
+                                disabled={working}
+                            />
+                        </label>
+                        {status && <div className={`home-status ${status.type}`}>{status.text}</div>}
+                        <button className="home-btn home-btn-primary" type="submit" disabled={working}>
+                            {isRegister ? "Create account" : "Sign in"}
+                        </button>
+                        {/* <button
+                            className="home-btn home-btn-secondary"
+                            type="button"
                             disabled={working}
-                        />
-                    </label>
-                    <label className="auth-label">
-                        Password
-                        <input
-                            className="auth-input"
-                            type="password"
-                            value={form.password}
-                            onChange={(event) => updateField("password", event.target.value)}
-                            disabled={working}
-                        />
-                    </label>
-                    <button className="home-btn home-btn-primary" type="submit" disabled={working}>
-                        {isRegister ? "Create account" : "Sign in"}
-                    </button>
-                    <button
-                        className="home-btn home-btn-secondary"
-                        type="button"
-                        disabled={working}
-                        onClick={() => {
-                            setIsRegister((current) => !current);
-                            setStatus(null);
-                        }}
-                    >
-                        {isRegister ? "Have an account? Sign in" : "Create a new account"}
-                    </button>
-                </form>
-                {status && <div className={`home-status ${status.type}`}>{status.text}</div>}
+                            onClick={() => {
+                                setIsRegister((current) => !current);
+                                setStatus(null);
+                            }}
+                        >
+                            {isRegister ? "Have an account? Sign in" : "Create a new account"}
+                        </button> */}
+                    </form>
+                ) : (
+                    <div className="auth-form-placeholder" />
+                )}
+
             </div>
         </main>
     );

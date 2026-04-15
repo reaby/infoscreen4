@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import * as fabric from "fabric";
 import { RgbaColorPicker } from "react-colorful";
 import type { RgbaColor } from "react-colorful";
-import { AlignLeft, AlignCenter, AlignRight, AlignJustify, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Crosshair, AlignStartVertical, AlignEndVertical, Undo2, Redo2, Bold, Italic, Underline, RectangleHorizontal, Type, ZoomIn, ZoomOut, Maximize2, Trash2, Save, FolderOpen, FolderPlus, ChevronDown, ImageIcon, Film } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, AlignJustify, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Crosshair, AlignStartVertical, AlignEndVertical, Undo2, Redo2, Bold, Italic, Underline, RectangleHorizontal, Type, ZoomIn, ZoomOut, Maximize2, Trash2, Save, FolderOpen, FilePlus, ChevronDown, ImageIcon, Film, ArrowLeft, FolderPlus } from "lucide-react";
 import SlidePickerModal from "./SlidePickerModal";
 import FileManagerDialog from "./FileManagerDialog";
+import { loadFabricJsonSafely } from "./fabricLoadHelpers";
 import { FabricVideo } from "./FabricVideo";
 
 interface ToolbarProps {
@@ -18,13 +20,15 @@ interface ToolbarProps {
     onRedo?: () => void;
     onClearCanvas?: () => void;
     onBundleMeta?: (meta: { width?: number; height?: number; backgroundColor?: string; backgroundFile?: string }) => void;
+    onMissingAssets?: (hasMissingAssets: boolean) => void;
     initialBundle?: string;
     initialSlide?: string;
     showBackground?: boolean;
     onToggleBackground?: () => void;
 }
 
-export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUndo, onRedo, onClearCanvas, onBundleMeta, initialBundle, initialSlide, showBackground, onToggleBackground }: ToolbarProps) {
+export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUndo, onRedo, onClearCanvas, onBundleMeta, onMissingAssets, initialBundle, initialSlide, showBackground, onToggleBackground }: ToolbarProps) {
+    const router = useRouter();
     const [fillColor, setFillColor] = useState<RgbaColor>({ r: 56, g: 189, b: 248, a: 1 });
     const [strokeColor, setStrokeColor] = useState<RgbaColor>({ r: 0, g: 0, b: 0, a: 1 });
     const [strokeWidth, setStrokeWidth] = useState(0);
@@ -44,7 +48,6 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
     const [bundleSize, setBundleSize] = useState({ width: 1920, height: 1080 });
 
     const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
-
     const fetchBundles = () =>
         fetch("/api/bundles").then((r) => r.json()).then((d) => {
             if (Array.isArray(d)) setBundles(d);
@@ -57,8 +60,18 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
         if (!canvas || !initialSlide) return;
         fetch(`/api/bundles/${encodeURIComponent(initialBundle ?? "default")}/slides/${encodeURIComponent(initialSlide)}`)
             .then((r) => r.ok ? r.json() : null)
-            .then((json) => { if (json) { canvas.loadFromJSON(json).then(() => canvas.requestRenderAll()); } })
-            .catch(() => {});
+            .then(async (json) => {
+                if (json) {
+                    const result = await loadFabricJsonSafely(canvas, json);
+                    canvas.requestRenderAll();
+                    onMissingAssets?.(result.missingAssets);
+                } else {
+                    onMissingAssets?.(false);
+                }
+            })
+            .catch(() => {
+                onMissingAssets?.(false);
+            });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canvas]);
 
@@ -78,7 +91,9 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
 
     const handleSave = async () => {
         if (!canvas) return;
-        const defaultName = `slide-${Date.now()}`;
+        const defaultName = initialSlide?.trim()
+            ? initialSlide.trim().replace(/[^a-zA-Z0-9_-]/g, "-")
+            : `slide-${Date.now()}`;
         const name = window.prompt("Slide name:", defaultName)?.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
         if (!name) return;
         await fetch(`/api/bundles/${encodeURIComponent(activeBundle)}/slides/${encodeURIComponent(name)}`, {
@@ -97,10 +112,14 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
         setSlidePickerOpen(false);
         if (!canvas) return;
         const res = await fetch(`/api/bundles/${encodeURIComponent(activeBundle)}/slides/${encodeURIComponent(slide)}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            onMissingAssets?.(false);
+            return;
+        }
         const json = await res.json();
-        await canvas.loadFromJSON(json);
+        const result = await loadFabricJsonSafely(canvas, json);
         canvas.requestRenderAll();
+        onMissingAssets?.(result.missingAssets);
     };
 
     const handleNewBundle = () => {
@@ -465,6 +484,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
     return (
         <>
         <div className="toolbar">
+            <button onClick={() => router.push("/admin")} className="toolbar-btn" title="Back to admin"><ArrowLeft size={15} /> Back to admin</button>
             <button onClick={onUndo} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
             <button onClick={onRedo} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Redo (Ctrl+Y)"><Redo2 size={15} /></button>
             <div className="toolbar-separator" />
@@ -545,8 +565,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
                 <button onClick={() => handleTextAlign("right")} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Align Right"><AlignRight size={15} /></button>
                 <button onClick={() => handleTextAlign("justify")} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Justify"><AlignJustify size={15} /></button>
             </div>
-            <div className="toolbar-separator" />
-            <button onClick={clearCanvas} className="toolbar-btn toolbar-btn-icon toolbar-btn-danger" title="Clear canvas"><Trash2 size={15} /></button>
+
             <div className="toolbar-separator" />
             <div className="toolbar-group">
                 <div className="toolbar-bundle-select-wrapper">
@@ -561,8 +580,9 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
                     <ChevronDown size={12} className="toolbar-bundle-chevron" />
                 </div>
                 <button onClick={handleNewBundle} className="toolbar-btn toolbar-btn-icon" title="New bundle"><FolderPlus size={15} /></button>
-                <button onClick={handleSave} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Save slide"><Save size={15} /></button>
+                <button onClick={clearCanvas} className="toolbar-btn toolbar-btn-icon " title="New slide"><FilePlus size={15} /></button>
                 <button onClick={handleLoad} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Load slide"><FolderOpen size={15} /></button>
+                <button onClick={handleSave} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Save slide"><Save size={15} /></button>
             </div>
         </div>
         {slidePickerOpen && (
