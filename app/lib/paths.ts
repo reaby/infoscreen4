@@ -28,3 +28,7 @@ export function getImagesDir(): string {
 export function getBackgroundsDir(): string {
     return path.join(getDataDir(), "backgrounds");
 }
+
+export function getVideosDir(): string {
+    return path.join(getDataDir(), "videos");
+}

@@ -65,6 +65,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
                     const result = await loadFabricJsonSafely(canvas, json);
                     canvas.requestRenderAll();
                     onMissingAssets?.(result.missingAssets);
+                    onResetZoom?.();
                 } else {
                     onMissingAssets?.(false);
                 }
@@ -120,6 +121,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
         const result = await loadFabricJsonSafely(canvas, json);
         canvas.requestRenderAll();
         onMissingAssets?.(result.missingAssets);
+        onResetZoom?.();
     };
 
     const handleNewBundle = () => {
@@ -258,7 +260,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
 
     const addVideoFromFile = (filename: string) => {
         if (!canvas) return;
-        const fileUrl = `/api/files/backgrounds/${encodeURIComponent(filename)}`;
+        const fileUrl = `/api/files/videos/${encodeURIComponent(filename)}`;
         const videoEl = document.createElement("video");
         videoEl.src = fileUrl;
         videoEl.loop = true;
@@ -594,7 +596,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
         )}
         {mediaPickerMode && (
             <FileManagerDialog
-                basePath={mediaPickerMode === "image" ? "/api/files/images" : "/api/files/backgrounds"}
+                basePath={mediaPickerMode === "image" ? "/api/files/images" : "/api/files/videos"}
                 onSelect={(filename) => { handleMediaSelect(filename).catch(() => {}); }}
                 onClose={() => setMediaPickerMode(null)}
             />

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { BundleMeta } from "../interfaces/BundleMeta";
 import FileManagerDialog from "./FileManagerDialog";
 
+const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
+
 interface Props {
     selectedBundle: string | null;
     bundleMeta: BundleMeta;
@@ -14,6 +16,7 @@ interface Props {
 
 export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDraft, setMetaDraft, saveMeta }: Props) {
     const [showFileMgr, setShowFileMgr] = useState(false);
+    const [fileMode, setFileMode] = useState<"backgrounds" | "videos">("backgrounds");
 
     return (
         <>
@@ -119,7 +122,19 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                 {/* ── Background media file ──────────── */}
                 <div className="ad-settings-group">
                     <label className="ad-settings-label">Background media file</label>
-                    <div className="ad-settings-row">
+                    <div className="ad-settings-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                            {(["backgrounds"] as const).map((mode) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    className={`fm-btn ${fileMode === mode ? "primary" : ""}`}
+                                    onClick={() => setFileMode(mode)}
+                                >
+                                    {mode === "backgrounds" ? "Backgrounds" : "Videos"}
+                                </button>
+                            ))}
+                        </div>
                         <button
                             className="ad-settings-input ad-settings-file-display ad-settings-file-pick"
                             onClick={() => setShowFileMgr(true)}
@@ -131,7 +146,7 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                         </button>
                         {metaDraft.backgroundFile && (<>
                             <a
-                                href={`/api/files/backgrounds/${encodeURIComponent(metaDraft.backgroundFile)}`}
+                                href={`/api/files/${isVideoFile(metaDraft.backgroundFile) ? "videos" : "backgrounds"}/${encodeURIComponent(metaDraft.backgroundFile)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="fm-btn"
@@ -168,7 +183,7 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
 
             {showFileMgr && (
                 <FileManagerDialog
-                    basePath="/api/files/backgrounds"
+                    basePath={`/api/files/${fileMode}`}
                     onSelect={(filename) => {
                         setMetaDraft((d) => ({ ...d, backgroundFile: filename }));
                     }}

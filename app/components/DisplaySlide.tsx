@@ -136,7 +136,9 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                 }
             });
     }, [json]);
-    const fileUrl = backgroundFile ? `/api/files/backgrounds/${encodeURIComponent(backgroundFile)}` : null;
+    const fileUrl = backgroundFile
+        ? `/api/files/backgrounds/${encodeURIComponent(backgroundFile)}`
+        : null;
     const fileIsVideo = backgroundFile ? isVideo(backgroundFile) : false;
 
     return (

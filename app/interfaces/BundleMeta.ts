@@ -6,7 +6,7 @@ export interface BundleSlideEntry {
 
 export interface BundleMeta {
     backgroundColor?: string;
-    backgroundFile?: string;  // filename from /api/files/backgrounds/[file]
+    backgroundFile?: string;  // filename from /api/files/backgrounds/[file] or /api/files/videos/[file] for video backgrounds
     width?: number;           // design canvas width  (default 1920)
     height?: number;          // design canvas height (default 1080)
     autoScale?: boolean;      // scale to fit display (default false)

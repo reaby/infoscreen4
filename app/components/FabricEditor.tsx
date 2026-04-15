@@ -2,11 +2,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import * as fabric from "fabric";
 import Toolbar from "./Toolbar";
 import ContextMenu from "./ContextMenu";
 import { loadFabricJsonSafely } from "./fabricLoadHelpers";
 import { FabricVideo } from "./FabricVideo";
+
+const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
 
 export default function FabricEditor({ initialBundle, initialSlide }: { initialBundle?: string; initialSlide?: string }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -66,6 +69,28 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         targetCanvas.requestRenderAll();
     }, [syncBackgroundLayer]);
 
+    const zoomCanvasToCenter = useCallback((targetCanvas: fabric.Canvas, zoom: number) => {
+        const viewportWidth = targetCanvas.getWidth();
+        const viewportHeight = targetCanvas.getHeight();
+        const centerPoint = new fabric.Point(viewportWidth / 2, viewportHeight / 2);
+        targetCanvas.zoomToPoint(centerPoint, zoom);
+
+        const contentWidth = Math.max(1, sizeRef.current.width) * zoom;
+        const contentHeight = Math.max(1, sizeRef.current.height) * zoom;
+        const vpt = targetCanvas.viewportTransform!;
+
+        if (contentWidth <= viewportWidth) {
+            vpt[4] = (viewportWidth - contentWidth) / 2;
+        }
+        if (contentHeight <= viewportHeight) {
+            vpt[5] = (viewportHeight - contentHeight) / 2;
+        }
+
+        targetCanvas.setViewportTransform(vpt);
+        syncBackgroundLayer(targetCanvas);
+        targetCanvas.requestRenderAll();
+    }, [syncBackgroundLayer]);
+
     useEffect(() => {
         if (!canvasRef.current) {
             console.log("Canvas ref not ready");
@@ -100,10 +125,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
             const zoom = canvas.getZoom() + delta;
             const clampedZoom = Math.max(0.1, Math.min(5, zoom));
-            canvas.setZoom(clampedZoom);
-            canvas.setViewportTransform(canvas.viewportTransform!);
-            syncBackgroundLayer(canvas);
-            canvas.requestRenderAll();
+            zoomCanvasToCenter(canvas, clampedZoom);
         };
 
         // Panning functionality using Fabric canvas events
@@ -339,7 +361,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             canvas.off("object:modified", saveSnapshot);
             canvas.dispose();
         };
-    }, [fitToBundle, resizeCanvasToContainer, syncBackgroundLayer]);
+    }, [fitToBundle, resizeCanvasToContainer, syncBackgroundLayer, zoomCanvasToCenter]);
 
     const handleUndo = async () => {
         if (!canvas || isRestoringRef.current || historyIndexRef.current <= 0) return;
@@ -391,18 +413,14 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         if (!canvas) return;
         const zoom = canvas.getZoom();
         const newZoom = Math.min(5, zoom + 0.2);
-        canvas.setZoom(newZoom);
-        syncBackgroundLayer(canvas);
-        canvas.requestRenderAll();
+        zoomCanvasToCenter(canvas, newZoom);
     };
 
     const handleZoomOut = () => {
         if (!canvas) return;
         const zoom = canvas.getZoom();
         const newZoom = Math.max(0.1, zoom - 0.2);
-        canvas.setZoom(newZoom);
-        syncBackgroundLayer(canvas);
-        canvas.requestRenderAll();
+        zoomCanvasToCenter(canvas, newZoom);
     };
 
     const handleClearCanvas = () => {
@@ -454,12 +472,22 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                     {!showBackground ? (
                         <div className="editor-bg-checker" />
                     ) : bundleBackground.file ? (
-                        <video
-                            key={bundleBackground.file}
-                            src={`/api/files/backgrounds/${encodeURIComponent(bundleBackground.file)}`}
-                            autoPlay loop muted playsInline
-                            className="editor-bg-media"
-                        />
+                        isVideoFile(bundleBackground.file) ? (
+                            <video
+                                key={bundleBackground.file}
+                                src={`/api/files/backgrounds/${encodeURIComponent(bundleBackground.file)}`}
+                                autoPlay loop muted playsInline
+                                className="editor-bg-media"
+                            />
+                        ) : (
+                            <Image
+                                src={`/api/files/backgrounds/${encodeURIComponent(bundleBackground.file)}`}
+                                className="editor-bg-media"
+                                alt="Background"
+                                fill
+                                sizes="100vw"
+                            />
+                        )
                     ) : bundleBackground.color ? (
                         <div className="editor-bg-color" style={{ background: bundleBackground.color }} />
                     ) : null}
