@@ -6,11 +6,12 @@ import dynamic from "next/dynamic";
 import { useSocket } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus,
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, User, ChevronDown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
+import UserManager from "../components/UserManager";
 const DisplaySlide = dynamic(() => import("../components/DisplaySlide"), { ssr: false });
 
 interface BundleInfo {
@@ -25,13 +26,51 @@ const normalizeSlideFile = (value: string) => (value.endsWith(".json") ? value :
 export default function AdminDashboard() {
     const defer = (fn: () => void) => queueMicrotask(fn);
     const router = useRouter();
+    const [authChecked, setAuthChecked] = useState(false);
+    const [currentUser, setCurrentUser] = useState<string | null>(null);
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement | null>(null);
     const { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, bundleMetaUpdate } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
+
+    useEffect(() => {
+        void fetch("/api/auth")
+            .then((response) => response.json())
+            .then((data) => {
+                if (!data.authenticated) {
+                    router.replace("/");
+                    return;
+                }
+                setCurrentUser(data.username ?? null);
+                setAuthChecked(true);
+            })
+            .catch(() => {
+                router.replace("/");
+            });
+    }, [router]);
+
+    useEffect(() => {
+        if (!userMenuOpen) return;
+        const handleClick = (event: MouseEvent) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+                setUserMenuOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, [userMenuOpen]);
+
+    const handleLogout = useCallback(async () => {
+        setUserMenuOpen(false);
+        await fetch("/api/auth", { method: "DELETE" });
+        router.replace("/");
+    }, [router]);
+
     const [selectedBundle, setSelectedBundle] = useState<string | null>(null);
     const [selectedSlide, setSelectedSlide] = useState<string | null>(null);
     const [previewJson, setPreviewJson] = useState<object | null>(null);
     const [liveJson, setLiveJson] = useState<object | null>(null);
-    const [previewTab, setPreviewTab] = useState<"preview" | "live" | "settings">("preview");
+    const [previewTab, setPreviewTab] = useState<"preview" | "live" | "settings" | "users">("preview");
     const [bundleMeta, setBundleMeta] = useState<BundleMeta>({});
     const [liveBundleMeta, setLiveBundleMeta] = useState<BundleMeta>({});
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
@@ -283,9 +322,14 @@ export default function AdminDashboard() {
         saveMeta({ slides: nextSlides });
     }, [orderedEntries, saveMeta, selectedSlide, slideDurationDraft, slides]);
 
+    if (!authChecked) {
+        return null;
+    }
+
     const previewHeaderTitle =
         previewTab === "preview" ? selectedSlide :
         previewTab === "live" ? state.activeSlide?.slide :
+        previewTab === "users" ? "User management" :
         selectedBundle;
 
     return (
@@ -321,6 +365,38 @@ export default function AdminDashboard() {
                     <button className="ad-nav-btn" onClick={loadBundles} title="Refresh">
                         <RefreshCw size={13} />
                     </button>
+
+                    <div className="ad-user-menu" ref={userMenuRef}>
+                        <button
+                            className="ad-nav-btn ad-user-menu-trigger"
+                            type="button"
+                            onClick={() => setUserMenuOpen((current) => !current)}
+                            title="User menu"
+                        >
+                            <User size={13} />
+                            <span>{currentUser ?? "Admin"}</span>
+                            <ChevronDown size={12} />
+                        </button>
+                        {userMenuOpen && (
+                            <div className="ad-user-menu-popover">
+                                <div className="ad-user-menu-title">Signed in as</div>
+                                <div className="ad-user-menu-username">{currentUser ?? "unknown"}</div>
+                                <button
+                                    className="ad-user-menu-item"
+                                    type="button"
+                                    onClick={() => {
+                                        setPreviewTab("users");
+                                        setUserMenuOpen(false);
+                                    }}
+                                >
+                                    Users
+                                </button>
+                                <button className="ad-user-menu-item" type="button" onClick={handleLogout}>
+                                    Logout
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </nav>
             </header>
 
@@ -476,6 +552,8 @@ export default function AdminDashboard() {
                             setMetaDraft={setMetaDraft}
                             saveMeta={saveMeta}
                         />
+                    ) : previewTab === "users" ? (
+                        <UserManager />
                     ) : (
                         <>
                         <div className="ad-preview-area">

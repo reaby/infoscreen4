@@ -2,20 +2,16 @@
   "backgroundColor": "#000000",
   "width": 1280,
   "height": 720,
-  "autoScale": false,
+  "autoScale": true,
   "slides": [
-    {
-      "file": "test.json",
-      "active": true
-    },
     {
       "file": "testing2.json",
       "active": true
     },
     {
-      "file": "testing.json",
+      "file": "test.json",
       "active": true
     }
   ],
-  "backgroundFile": "bg.mp4"
+  "backgroundFile": "snooze_bg.mp4"
 }

@@ -9,6 +9,7 @@ import { FabricVideo } from "./FabricVideo";
 
 export default function FabricEditor({ initialBundle, initialSlide }: { initialBundle?: string; initialSlide?: string }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const bgLayerRef = useRef<HTMLDivElement | null>(null);
     const sizeRef = useRef({ width: 1920, height: 1080 });
     const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
@@ -43,6 +44,15 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         targetCanvas.requestRenderAll();
     };
 
+    const resizeCanvasToContainer = (targetCanvas: fabric.Canvas) => {
+        const container = containerRef.current;
+        if (!container) return;
+        const width = Math.max(1, container.clientWidth);
+        const height = Math.max(1, container.clientHeight);
+        targetCanvas.setDimensions({ width, height });
+        targetCanvas.calcOffset();
+    };
+
     const syncBackgroundLayer = (targetCanvas: fabric.Canvas) => {
         const layer = bgLayerRef.current;
         if (!layer) return;
@@ -63,6 +73,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             selection: true,
         });
 
+        resizeCanvasToContainer(canvas);
         fitToBundle(canvas);
 
         setCanvas(canvas);
@@ -166,6 +177,14 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 setContextMenu({ visible: false, x: 0, y: 0 });
             }
         };
+
+        const handleResize = () => {
+            resizeCanvasToContainer(canvas);
+            fitToBundle(canvas);
+        };
+
+        window.addEventListener("resize", handleResize);
+
         // Keyboard event handler for nudging and deletion
         const handleKeyDown = (e: KeyboardEvent) => {
             // Handle Ctrl/Cmd key press
@@ -304,6 +323,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             console.log("Cleaning up canvas");
             document.removeEventListener("keydown", handleKeyDown);
             document.removeEventListener("keyup", handleKeyUp);
+            window.removeEventListener("resize", handleResize);
             canvas.off("mouse:wheel", handleWheel);
             canvas.off("mouse:down", handleMouseDown);
             canvas.off("mouse:move", handleMouseMove);
@@ -394,7 +414,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 initialBundle={initialBundle}
                 initialSlide={initialSlide}
             />
-            <div className="editorAreaContainer">
+            <div ref={containerRef} className="editorAreaContainer">
                 <div ref={bgLayerRef} className="editor-bg-layer">
                     {!showBackground ? (
                         <div className="editor-bg-checker" />
