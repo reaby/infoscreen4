@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import * as fabric from "fabric";
 import { RgbaColorPicker } from "react-colorful";
 import type { RgbaColor } from "react-colorful";
-import { AlignLeft, AlignCenter, AlignRight, AlignJustify, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Crosshair, AlignStartVertical, AlignEndVertical, Undo2, Redo2, Bold, Italic, Underline, RectangleHorizontal, Type, ZoomIn, ZoomOut, Maximize2, Trash2, Save, FolderOpen, FilePlus, ChevronDown, ImageIcon, Film, ArrowLeft, FolderPlus } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, AlignJustify, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Crosshair, AlignStartVertical, AlignEndVertical, Undo2, Redo2, Bold, Italic, Underline, RectangleHorizontal, Type, ZoomIn, ZoomOut, Maximize2, HelpCircle, Trash2, Save, FolderOpen, FilePlus, ChevronDown, ImageIcon, Film, ArrowLeft, FolderPlus } from "lucide-react";
 import SlidePickerModal from "./SlidePickerModal";
 import FileManagerDialog from "./FileManagerDialog";
 import { loadFabricJsonSafely } from "./fabricLoadHelpers";
@@ -23,13 +23,14 @@ interface ToolbarProps {
     onClearCanvas?: () => void;
     onBundleMeta?: (meta: { width?: number; height?: number; backgroundColor?: string; backgroundFile?: string }) => void;
     onMissingAssets?: (hasMissingAssets: boolean) => void;
+    onHelp?: () => void;
     initialBundle?: string;
     initialSlide?: string;
     showBackground?: boolean;
     onToggleBackground?: () => void;
 }
 
-export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onResetZoom, zoomLevel = 1, onUndo, onRedo, onClearCanvas, onBundleMeta, onMissingAssets, initialBundle, initialSlide, showBackground, onToggleBackground }: ToolbarProps) {
+export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onResetZoom, zoomLevel = 1, onUndo, onRedo, onClearCanvas, onBundleMeta, onMissingAssets, onHelp, initialBundle, initialSlide, showBackground, onToggleBackground }: ToolbarProps) {
     const router = useRouter();
     const [fillColor, setFillColor] = useState<RgbaColor>({ r: 56, g: 189, b: 248, a: 1 });
     const [strokeColor, setStrokeColor] = useState<RgbaColor>({ r: 0, g: 0, b: 0, a: 1 });
@@ -502,6 +503,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
             <button onClick={onActualZoom} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Zoom 1x">1x</button>
             <span className="toolbar-label">{Math.round((zoomLevel ?? 1) * 100)}%</span>
             <button onClick={onResetZoom} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Fit to screen"><Maximize2 size={15} /></button>
+            <button onClick={onHelp} className="toolbar-btn toolbar-btn-icon" title="Shortcut help"><HelpCircle size={15} /></button>
             <div className="toolbar-separator" />
             <button
                 onClick={onToggleBackground}

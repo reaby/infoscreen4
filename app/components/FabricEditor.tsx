@@ -6,6 +6,7 @@ import Image from "next/image";
 import * as fabric from "fabric";
 import Toolbar from "./Toolbar";
 import ContextMenu from "./ContextMenu";
+import ShortcutHelpPopup from "./ShortcutHelpPopup";
 import { loadFabricJsonSafely } from "./fabricLoadHelpers";
 import { FabricVideo } from "./FabricVideo";
 
@@ -20,6 +21,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
     const [showBackground, setShowBackground] = useState(false);
     const [bundleBackground, setBundleBackground] = useState<{ color?: string; file?: string }>({});
     const [zoomLevel, setZoomLevel] = useState(1);
+    const [showHelp, setShowHelp] = useState(false);
     const [missingAssetNoticeCount, setMissingAssetNoticeCount] = useState(0);
     const [missingAssetNoticeVisible, setMissingAssetNoticeVisible] = useState(false);
     const missingAssetTimeoutRef = useRef<number | null>(null);
@@ -233,6 +235,18 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                     e.preventDefault();
                     break;
             }
+            if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === 'Add' || e.key === '-' || e.key === 'Subtract' || e.code === 'Digit0')) {
+                e.preventDefault();
+                const zoom = canvas.getZoom();
+                let newZoom = (e.key === '-' || e.key === 'Subtract')
+                    ? Math.max(0.1, zoom - 0.1)
+                    : Math.min(5, zoom + 0.1);
+                if (e.code === 'Digit0') {
+                    newZoom = 1;
+                }
+                zoomCanvasToCenter(canvas, newZoom);
+                return;
+            }
             if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault();
                 if (!isRestoringRef.current && historyIndexRef.current > 0) {
@@ -318,7 +332,15 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             }
         };
 
-
+        const handleRotating = (event: any) => {
+            const target = event.target as fabric.Object | null;
+            if (!target) return;
+            if (!ctrlModRef.current) return;
+            const angle = target.angle ?? 0;
+            const snapped = Math.round(angle / 15) * 15;
+            target.set("angle", snapped);
+            target.setCoords();
+        };
 
         // Add keyboard event listeners
         document.addEventListener("keydown", handleKeyDown);
@@ -330,6 +352,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         canvas.on("mouse:move", handleMouseMove);
         canvas.on("mouse:up", handleMouseUp);
         canvas.on("object:scaling", handleScaling);
+        canvas.on("object:rotating", handleRotating);
         const handleAfterRender = () => syncBackgroundLayer(canvas);
         canvas.on("after:render", handleAfterRender);
 
@@ -358,6 +381,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             canvas.off("mouse:move", handleMouseMove);
             canvas.off("mouse:up", handleMouseUp);
             canvas.off("object:scaling", handleScaling);
+            canvas.off("object:rotating", handleRotating);
             canvas.off("after:render", handleAfterRender);
             canvas.off("object:added", saveSnapshot);
             canvas.off("object:removed", saveSnapshot);
@@ -415,14 +439,14 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
     const handleZoomIn = () => {
         if (!canvas) return;
         const zoom = canvas.getZoom();
-        const newZoom = Math.min(5, zoom + 0.2);
+        const newZoom = Math.min(5, zoom + 0.1);
         zoomCanvasToCenter(canvas, newZoom);
     };
 
     const handleZoomOut = () => {
         if (!canvas) return;
         const zoom = canvas.getZoom();
-        const newZoom = Math.max(0.1, zoom - 0.2);
+        const newZoom = Math.max(0.1, zoom - 0.1);
         zoomCanvasToCenter(canvas, newZoom);
     };
 
@@ -472,6 +496,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 }}
                 zoomLevel={zoomLevel}
                 onActualZoom={handleActualZoom}
+                onHelp={() => setShowHelp(true)}
                 showBackground={showBackground}
                 onToggleBackground={() => setShowBackground((v) => !v)}
                 initialBundle={initialBundle}
@@ -581,6 +606,14 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 onClose={() => setContextMenu({ ...contextMenu, visible: false })}
                 canvas={canvas}
             />
+            {showHelp && (
+                <ShortcutHelpPopup onClose={() => setShowHelp(false)}>
+                    <div className="slide-picker-item" style={{ cursor: "default" }}>
+                        <strong>Additional shortcuts</strong>
+                        <p>Esc: close shortcut help</p>
+                    </div>
+                </ShortcutHelpPopup>
+            )}
         </div>
     );
 }
