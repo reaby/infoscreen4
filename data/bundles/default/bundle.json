@@ -2,7 +2,7 @@
   "backgroundColor": "#000000",
   "width": 1280,
   "height": 720,
-  "autoScale": true,
+  "autoScale": false,
   "slides": [
     {
       "file": "testing2.json",

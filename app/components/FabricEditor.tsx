@@ -19,6 +19,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
     const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
     const [showBackground, setShowBackground] = useState(false);
     const [bundleBackground, setBundleBackground] = useState<{ color?: string; file?: string }>({});
+    const [zoomLevel, setZoomLevel] = useState(1);
     const [missingAssetNoticeCount, setMissingAssetNoticeCount] = useState(0);
     const [missingAssetNoticeVisible, setMissingAssetNoticeVisible] = useState(false);
     const missingAssetTimeoutRef = useRef<number | null>(null);
@@ -65,6 +66,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         const offsetY = (viewportHeight - contentHeight * fitZoom) / 2;
 
         targetCanvas.setViewportTransform([fitZoom, 0, 0, fitZoom, offsetX, offsetY]);
+        setZoomLevel(fitZoom);
         syncBackgroundLayer(targetCanvas);
         targetCanvas.requestRenderAll();
     }, [syncBackgroundLayer]);
@@ -87,6 +89,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         }
 
         targetCanvas.setViewportTransform(vpt);
+        setZoomLevel(zoom);
         syncBackgroundLayer(targetCanvas);
         targetCanvas.requestRenderAll();
     }, [syncBackgroundLayer]);
@@ -206,7 +209,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
 
         const handleResize = () => {
             resizeCanvasToContainer(canvas);
-            fitToBundle(canvas);
+            zoomCanvasToCenter(canvas, canvas.getZoom());
         };
 
         window.addEventListener("resize", handleResize);
@@ -423,6 +426,11 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         zoomCanvasToCenter(canvas, newZoom);
     };
 
+    const handleActualZoom = () => {
+        if (!canvas) return;
+        zoomCanvasToCenter(canvas, 1);
+    };
+
     const handleClearCanvas = () => {
         if (!canvas) return;
         isRestoringRef.current = true;
@@ -442,7 +450,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
     };
 
     return (
-        <>
+        <div className="editor-root">
             <Toolbar
                 canvas={canvas}
                 onZoomIn={handleZoomIn}
@@ -462,6 +470,8 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 onMissingAssets={(hasMissing) => {
                     if (hasMissing) setMissingAssetNoticeCount((count) => count + 1);
                 }}
+                zoomLevel={zoomLevel}
+                onActualZoom={handleActualZoom}
                 showBackground={showBackground}
                 onToggleBackground={() => setShowBackground((v) => !v)}
                 initialBundle={initialBundle}
@@ -571,6 +581,6 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                 onClose={() => setContextMenu({ ...contextMenu, visible: false })}
                 canvas={canvas}
             />
-        </>
+        </div>
     );
 }

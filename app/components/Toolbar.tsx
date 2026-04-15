@@ -15,7 +15,9 @@ interface ToolbarProps {
     canvas: fabric.Canvas | null;
     onZoomIn?: () => void;
     onZoomOut?: () => void;
+    onActualZoom?: () => void;
     onResetZoom?: () => void;
+    zoomLevel?: number;
     onUndo?: () => void;
     onRedo?: () => void;
     onClearCanvas?: () => void;
@@ -27,7 +29,7 @@ interface ToolbarProps {
     onToggleBackground?: () => void;
 }
 
-export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUndo, onRedo, onClearCanvas, onBundleMeta, onMissingAssets, initialBundle, initialSlide, showBackground, onToggleBackground }: ToolbarProps) {
+export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onResetZoom, zoomLevel = 1, onUndo, onRedo, onClearCanvas, onBundleMeta, onMissingAssets, initialBundle, initialSlide, showBackground, onToggleBackground }: ToolbarProps) {
     const router = useRouter();
     const [fillColor, setFillColor] = useState<RgbaColor>({ r: 56, g: 189, b: 248, a: 1 });
     const [strokeColor, setStrokeColor] = useState<RgbaColor>({ r: 0, g: 0, b: 0, a: 1 });
@@ -65,7 +67,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
                     const result = await loadFabricJsonSafely(canvas, json);
                     canvas.requestRenderAll();
                     onMissingAssets?.(result.missingAssets);
-                    onResetZoom?.();
+                    onActualZoom?.();
                 } else {
                     onMissingAssets?.(false);
                 }
@@ -121,7 +123,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
         const result = await loadFabricJsonSafely(canvas, json);
         canvas.requestRenderAll();
         onMissingAssets?.(result.missingAssets);
-        onResetZoom?.();
+        onActualZoom?.();
     };
 
     const handleNewBundle = () => {
@@ -497,7 +499,9 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onResetZoom, onUn
             <div className="toolbar-separator" />
             <button onClick={onZoomIn} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Zoom In"><ZoomIn size={15} /></button>
             <button onClick={onZoomOut} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Zoom Out"><ZoomOut size={15} /></button>
-            <button onClick={onResetZoom} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Reset Zoom"><Maximize2 size={15} /></button>
+            <button onClick={onActualZoom} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Zoom 1x">1x</button>
+            <span className="toolbar-label">{Math.round((zoomLevel ?? 1) * 100)}%</span>
+            <button onClick={onResetZoom} className="toolbar-btn toolbar-btn-icon" disabled={!canvas} title="Fit to screen"><Maximize2 size={15} /></button>
             <div className="toolbar-separator" />
             <button
                 onClick={onToggleBackground}
