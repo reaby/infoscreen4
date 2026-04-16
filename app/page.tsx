@@ -25,7 +25,7 @@ export default function Home() {
 
     useEffect(() => {
         fetch("/api/users").then((response) => response.json()).then((data) => {
-            if (data.users === 0) setIsRegister(true);
+            if (data.length == 0) setIsRegister(true);
         });
 
         fetch("/api/auth")

@@ -3,7 +3,7 @@ import { createUser, deleteUser, getAllUsers } from "../../lib/auth";
 
 export async function GET() {
     const users = await getAllUsers();
-    return NextResponse.json({users: users.length});
+    return NextResponse.json(users);
 }
 
 export async function POST(req: NextRequest) {
