@@ -487,6 +487,18 @@ canvas {
     display: flex;
     gap: 12px;
     margin-top: 12px;
+    align-items: center;
+}
+
+.home-display-select {
+    min-width: 140px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--tb-border);
+    background: var(--tb-surface);
+    color: var(--tb-text);
+    font-size: 14px;
 }
 
 .home-btn {
@@ -1153,6 +1165,57 @@ canvas {
 .ad-icon-btn:hover {
     background: var(--tb-surface);
     color: var(--tb-text);
+}
+
+.ad-display-select {
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid var(--tb-border);
+    background: var(--tb-surface);
+    color: var(--tb-text);
+    padding: 0 4px;
+    margin-right: 6px;
+    font-size: 12px;
+}
+
+.ad-display-config-panel {
+    background: var(--tb-bg-deep);
+    padding: 12px;
+    margin: 8px 10px;
+    color: var(--tb-text);
+    display: grid;
+    gap: 10px;
+}
+
+.ad-display-config-panel .ad-settings-input {
+    height: 28px;
+    padding: 4px 8px;
+}
+
+.ad-display-config-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ad-display-config-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ad-display-config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ad-display-config-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 /* ── Lists ──────────────────────────────── */

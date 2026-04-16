@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 type ApiResult = {
@@ -14,6 +14,8 @@ const emptyForm = { username: "", password: "" };
 export default function Home() {
     const [form, setForm] = useState(emptyForm);
     const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+    const [displayOptions, setDisplayOptions] = useState<{ id: string; name: string }[]>([]);
+    const [selectedDisplay, setSelectedDisplay] = useState("");
     const [isRegister, setIsRegister] = useState(false);
     const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [working, setWorking] = useState(false);
@@ -21,6 +23,22 @@ export default function Home() {
 
     useEffect(() => {
         setMounted(true);
+    }, []);
+
+    const refreshDisplayOptions = useCallback(async () => {
+        try {
+            const response = await fetch("/api/displays");
+            if (!response.ok) throw new Error("Failed to load display configs");
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                setDisplayOptions(data);
+                setSelectedDisplay((current) => current || data[0].id);
+                return;
+            }
+        } catch {
+            setDisplayOptions([{ id: "1", name: "Display 1" }]);
+            setSelectedDisplay((current) => current || "1");
+        }
     }, []);
 
     useEffect(() => {
@@ -36,7 +54,20 @@ export default function Home() {
                 }
             })
             .catch(() => null);
-    }, []);
+
+        refreshDisplayOptions();
+    }, [refreshDisplayOptions]);
+
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") {
+                refreshDisplayOptions();
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibility);
+        return () => document.removeEventListener("visibilitychange", handleVisibility);
+    }, [refreshDisplayOptions]);
 
     const updateField = (field: "username" | "password", value: string) => {
         setForm((current) => ({ ...current, [field]: value }));
@@ -99,9 +130,20 @@ export default function Home() {
                 <h1 className="home-title">Infoscreen<span>4</span></h1>
                 <p className="home-subtitle">Welcome back, {loggedInUser}.</p>
                 <div className="home-actions">
-                    <Link href="/display" className="home-btn home-btn-primary">Display</Link>
+                    <select
+                        className="home-display-select"
+                        value={selectedDisplay}
+                        onChange={(event) => setSelectedDisplay(event.target.value)}
+                        title="Select display"
+                    >
+                        {displayOptions.length > 0 ? displayOptions.map((display) => (
+                            <option key={display.id} value={display.id}>{display.name}</option>
+                        )) : (
+                            <option value="1">Display 1</option>
+                        )}
+                    </select>
+                    <Link href={`/display/${selectedDisplay || displayOptions[0]?.id || "1"}`} className="home-btn home-btn-primary">Display</Link>
                     <Link href="/admin" className="home-btn home-btn-secondary">Admin</Link>
-
                 </div>
                 <button className="home-btn home-btn-outlined" type="button" onClick={handleLogout}>Logout</button>
             </div>

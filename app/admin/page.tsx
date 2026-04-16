@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useSocket } from "../hooks/useSocket";
+import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
     Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, User, ChevronDown,
@@ -30,8 +30,10 @@ export default function AdminDashboard() {
     const [currentUser, setCurrentUser] = useState<string | null>(null);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement | null>(null);
-    const { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, bundleMetaUpdate } = useSocket("admin");
+    const { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
+    const [selectedDisplay, setSelectedDisplay] = useState<string | null>(null);
+    const [displayDrafts, setDisplayDrafts] = useState<DisplayConfig[]>([]);
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -81,7 +83,7 @@ export default function AdminDashboard() {
     const [selectedSlide, setSelectedSlide] = useState<string | null>(null);
     const [previewJson, setPreviewJson] = useState<object | null>(null);
     const [liveJson, setLiveJson] = useState<object | null>(null);
-    const [previewTab, setPreviewTab] = useState<"preview" | "live" | "settings" | "users">("preview");
+    const [previewTab, setPreviewTab] = useState<"preview" | "live" | "settings" | "users" | "displays">("preview");
     const [bundleMeta, setBundleMeta] = useState<BundleMeta>({});
     const [liveBundleMeta, setLiveBundleMeta] = useState<BundleMeta>({});
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
@@ -96,13 +98,35 @@ export default function AdminDashboard() {
         bundleMetaRef.current = bundleMeta;
     }, [bundleMeta]);
 
+    const effectiveSelectedDisplay = useMemo(() => {
+        if (selectedDisplay && state.displayConfigs.some((conf) => conf.id === selectedDisplay)) {
+            return selectedDisplay;
+        }
+        return state.displayConfigs[0]?.id ?? null;
+    }, [selectedDisplay, state.displayConfigs]);
+
+    useEffect(() => {
+        defer(() => setDisplayDrafts(state.displayConfigs));
+    }, [state.displayConfigs]);
+
+    const selectedDisplayState = useMemo(
+        () => effectiveSelectedDisplay ? state.displayStates?.[effectiveSelectedDisplay] ?? null : null,
+        [effectiveSelectedDisplay, state.displayStates]
+    );
+
+    const selectedDisplayConfig = useMemo(
+        () => effectiveSelectedDisplay ? state.displayConfigs.find((conf) => conf.id === effectiveSelectedDisplay) ?? null : null,
+        [effectiveSelectedDisplay, state.displayConfigs]
+    );
+
     const slides = useMemo(
         () => bundles.find((b) => b.name === selectedBundle)?.slides ?? [],
         [bundles, selectedBundle]
     );
+    const selectedDisplayBundle = selectedDisplayState?.bundle ?? selectedBundle;
     const activeBundleSlides = useMemo(
-        () => bundles.find((b) => b.name === state.activeBundle)?.slides ?? [],
-        [bundles, state.activeBundle]
+        () => bundles.find((b) => b.name === selectedDisplayBundle)?.slides ?? [],
+        [bundles, selectedDisplayBundle]
     );
     const orderedEntries: BundleSlideEntry[] = useMemo(() => (
         (bundleMeta.slides ?? []).map((entry) => ({
@@ -181,7 +205,7 @@ export default function AdminDashboard() {
 
     // Fetch live JSON + live bundle metadata whenever the active broadcast slide changes
     useEffect(() => {
-        const active = state.activeSlide;
+        const active = selectedDisplayState;
         if (!active) {
             defer(() => {
                 setLiveJson(null);
@@ -222,15 +246,15 @@ export default function AdminDashboard() {
             setLiveBundleMeta((meta ?? {}) as BundleMeta);
             setLiveJson(json);
         });
-    }, [state.activeSlide]);
+    }, [selectedDisplayState]);
 
     // Apply live meta updates only to the current live bundle view
     useEffect(() => {
         if (!bundleMetaUpdate) return;
-        const active = state.activeSlide;
+        const active = selectedDisplayState;
         if (!active || active.bundle !== bundleMetaUpdate.bundle) return;
         defer(() => setLiveBundleMeta(bundleMetaUpdate.meta as BundleMeta));
-    }, [bundleMetaUpdate, state.activeSlide]);
+    }, [bundleMetaUpdate, selectedDisplayState]);
 
     // Load slide JSON for preview whenever selection changes
     useEffect(() => {
@@ -250,7 +274,8 @@ export default function AdminDashboard() {
     }, [selectedBundle, selectedSlide]);
 
     const handleShowSlide = async () => {
-        const targetBundle = state.activeBundle;
+        if (!effectiveSelectedDisplay) return;
+        const targetBundle = selectedDisplayState?.bundle ?? selectedBundle;
         if (!targetBundle || activeBundleSlides.length === 0) return;
 
         const canUsePreviewSelection = selectedBundle === targetBundle
@@ -259,8 +284,8 @@ export default function AdminDashboard() {
 
         const slideToShow = canUsePreviewSelection
             ? selectedSlide
-            : (state.activeSlide?.bundle === targetBundle && state.activeSlide?.slide
-                ? state.activeSlide.slide
+            : (selectedDisplayState?.bundle === targetBundle && selectedDisplayState?.slide
+                ? selectedDisplayState.slide
                 : activeBundleSlides[0]);
 
         if (selectedBundle === targetBundle && selectedSlide !== slideToShow) {
@@ -283,8 +308,20 @@ export default function AdminDashboard() {
             }
         }
 
-        showSlide({ bundle: targetBundle, slide: slideToShow, duration: baseDuration });
+        showSlide(effectiveSelectedDisplay, { bundle: targetBundle, slide: slideToShow, duration: baseDuration });
     };
+
+    const handleStopCycle = useCallback(() => {
+        if (!effectiveSelectedDisplay) return;
+        stopCycle(effectiveSelectedDisplay);
+    }, [effectiveSelectedDisplay, stopCycle]);
+
+    const handleClearSlide = useCallback(() => {
+        if (!effectiveSelectedDisplay) return;
+        clearSlide(effectiveSelectedDisplay);
+    }, [effectiveSelectedDisplay, clearSlide]);
+
+    const selectedDisplayIsCycling = effectiveSelectedDisplay ? state.displayCycling?.[effectiveSelectedDisplay] ?? false : false;
 
     const handleNewBundle = async () => {
         const name = window.prompt("New bundle name:")?.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -306,7 +343,7 @@ export default function AdminDashboard() {
     };
 
     const isActive = (bundle: string, slide: string) =>
-        state.activeSlide?.bundle === bundle && state.activeSlide?.slide === slide;
+        selectedDisplayState?.bundle === bundle && selectedDisplayState?.slide === slide;
 
     const setLocalSlideOrder = useCallback((order: string[]) => {
         if (!selectedBundle) return;
@@ -364,7 +401,7 @@ export default function AdminDashboard() {
 
     const previewHeaderTitle =
         previewTab === "preview" ? selectedSlide :
-        previewTab === "live" ? state.activeSlide?.slide :
+        previewTab === "live" ? selectedDisplayState?.slide :
         previewTab === "users" ? "User management" :
         selectedBundle;
 
@@ -389,15 +426,34 @@ export default function AdminDashboard() {
                             ? <><Monitor size={13} />&nbsp;{state.connectedDisplays} display{state.connectedDisplays !== 1 ? "s" : ""}</>
                             : <><MonitorOff size={13} />&nbsp;No displays</>}
                     </span>
-                    {state.activeSlide && (
+                    {selectedDisplayConfig && (
+                        <span className="ad-now-pill">
+                            {selectedDisplayConfig.name}
+                        </span>
+                    )}
+                    {selectedDisplayState && (
                         <span className="ad-now-pill">
                             <Play size={11} />
-                            &nbsp;{state.activeSlide.bundle}&nbsp;/&nbsp;<strong>{state.activeSlide.slide}</strong>
+                            &nbsp;{selectedDisplayState.bundle}&nbsp;/&nbsp;<strong>{selectedDisplayState.slide}</strong>
                         </span>
                     )}
                 </div>
 
                 <nav className="ad-header-nav">
+                    {state.displayConfigs.length > 0 && (
+                        <>
+                            <select
+                                className="ad-display-select"
+                                value={effectiveSelectedDisplay ?? ""}
+                                onChange={(e) => setSelectedDisplay(e.target.value)}
+                                title="Select display"
+                            >
+                                {state.displayConfigs.map((conf) => (
+                                    <option key={conf.id} value={conf.id}>{conf.name}</option>
+                                ))}
+                            </select>
+                        </>
+                    )}
                     <button className="ad-nav-btn" onClick={loadBundles} title="Refresh">
                         <RefreshCw size={13} />
                     </button>
@@ -436,6 +492,7 @@ export default function AdminDashboard() {
                 </nav>
             </header>
 
+
             {/* ── Main 3-column area ─────────────────── */}
             <main className="ad-main">
 
@@ -460,9 +517,9 @@ export default function AdminDashboard() {
                                     </button>
                                     <span className="ad-list-item-count">{b.slides.length}</span>
                                     <button
-                                        className={`ad-bundle-active-btn${state.activeBundle === b.name ? " on" : ""}`}
-                                        onClick={() => activateBundle(b.name)}
-                                        title={state.activeBundle === b.name ? "Active bundle" : "Set as active bundle"}
+                                        className={`ad-bundle-active-btn${selectedDisplayState?.bundle === b.name ? " on" : ""}`}
+                                        onClick={() => selectedDisplay && activateBundle(b.name, selectedDisplay)}
+                                        title={selectedDisplayState?.bundle === b.name ? "Active bundle" : "Set as active bundle"}
                                     >
                                         <Zap size={11} />
                                     </button>
@@ -569,15 +626,23 @@ export default function AdminDashboard() {
                                 >
                                     <Settings size={11} /> Settings
                                 </button>
+                                {state.displayConfigs.length > 0 && (
+                                    <button
+                                        className={`ad-preview-tab ${previewTab === "displays" ? "active" : ""}`}
+                                        type="button"
+                                        onClick={() => setPreviewTab("displays")}
+                                        title="Display settings"
+                                    >
+                                        Displays
+                                    </button>
+                                )}
                             </div>
 
-                            <span className="ad-preview-header-title">{previewHeaderTitle ?? ""}</span>
-
                             <button
-                                className={`ad-preview-tab ad-preview-tab-live-edge ${previewTab === "live" ? "active" : ""} ${state.activeSlide ? "live" : ""}`}
+                                className={`ad-preview-tab ad-preview-tab-live-edge ${previewTab === "live" ? "active" : ""} ${selectedDisplayState ? "live" : ""}`}
                                 onClick={() => setPreviewTab("live")}
                             >
-                                {state.activeSlide && <span className="ad-live-dot" />}Live
+                                {selectedDisplayState && <span className="ad-live-dot" />}Live
                             </button>
                         </div>
                     </div>
@@ -592,6 +657,78 @@ export default function AdminDashboard() {
                         />
                     ) : previewTab === "users" ? (
                         <UserManager />
+                    ) : previewTab === "displays" ? (
+                        <div className="ad-display-config-panel">
+                            <div className="ad-display-config-header">
+                                <strong>Display configuration</strong>
+                            </div>
+                            {displayDrafts.map((config, index) => (
+                                <div className="ad-display-config-row" key={config.id}>
+                                    <div className="ad-display-config-field">
+                                        <label className="ad-label">ID</label>
+                                        <input
+                                            value={config.id}
+                                            onChange={(e) => {
+                                                const nextId = e.target.value.trim();
+                                                setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, id: nextId || item.id } : item));
+                                            }}
+                                            className="ad-settings-input"
+                                            style={{ width: 100 }}
+                                        />
+                                    </div>
+                                    <div className="ad-display-config-field">
+                                        <label className="ad-label">Name</label>
+                                        <input
+                                            value={config.name}
+                                            onChange={(e) => setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, name: e.target.value } : item))}
+                                            className="ad-settings-input"
+                                            style={{ width: 180 }}
+                                        />
+                                    </div>
+                                    <button
+                                        className="ad-nav-btn"
+                                        type="button"
+                                        onClick={() => setDisplayDrafts((current) => current.filter((_, idx) => idx !== index))}
+                                        disabled={displayDrafts.length <= 1}
+                                        title="Remove display"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                            <div className="ad-display-config-actions">
+                                <button
+                                    className="ad-nav-btn"
+                                    type="button"
+                                    onClick={() => setDisplayDrafts((current) => [
+                                        ...current,
+                                        { id: `display-${current.length + 1}`, name: `Display ${current.length + 1}` },
+                                    ])}
+                                >
+                                    Add display
+                                </button>
+                                <button
+                                    className="ad-nav-btn"
+                                    type="button"
+                                    onClick={() => {
+                                        updateDisplayConfig(displayDrafts);
+                                        setPreviewTab("preview");
+                                    }}
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    className="ad-nav-btn"
+                                    type="button"
+                                    onClick={() => {
+                                        setDisplayDrafts(state.displayConfigs);
+                                        setPreviewTab("preview");
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
                     ) : (
                         <>
                         <div className="ad-preview-area">
@@ -599,7 +736,7 @@ export default function AdminDashboard() {
                             {previewTab === "preview" && !selectedSlide && !loadingPreview && (
                                 <div className="ad-preview-overlay">Select a slide to preview</div>
                             )}
-                            {previewTab === "live" && !state.activeSlide && (
+                            {previewTab === "live" && !selectedDisplayState && (
                                 <div className="ad-preview-overlay">Nothing broadcasting</div>
                             )}
                             <DisplaySlide
@@ -659,12 +796,12 @@ export default function AdminDashboard() {
                         <StepBack size={16} />
                     </button>
                     <button
-                        className={`ad-foot-btn ${state.isCycling ? "ad-foot-danger" : "ad-foot-primary"}`}
-                        onClick={state.isCycling ? stopCycle : handleShowSlide}
-                        disabled={state.isCycling
+                        className={`ad-foot-btn ${selectedDisplayIsCycling ? "ad-foot-danger" : "ad-foot-primary"}`}
+                        onClick={selectedDisplayIsCycling ? handleStopCycle : handleShowSlide}
+                        disabled={selectedDisplayIsCycling
                             ? !connected
-                            : !connected || !state.activeBundle || activeBundleSlides.length === 0}
-                        title={state.isCycling ? "Pause cycling" : "Show selected slide"}
+                            : !connected || !selectedDisplayBundle || activeBundleSlides.length === 0}
+                        title={selectedDisplayIsCycling ? "Pause cycling" : "Show selected slide"}
                     >
                         {state.isCycling ? <Pause size={16} /> : <Play size={16} />}
                     </button>
@@ -672,7 +809,7 @@ export default function AdminDashboard() {
                         <StepForward size={16} />
                     </button>
                     <div className="ad-footer-sep" />
-                    <button className="ad-foot-btn ad-foot-danger" onClick={clearSlide} disabled={!state.activeSlide} title="Blackout">
+                    <button className="ad-foot-btn ad-foot-danger" onClick={handleClearSlide} disabled={!selectedDisplayState} title="Blackout">
                         <CircleOff size={16} />
                     </button>
                     <button className="ad-foot-btn" onClick={() => loadBundles()} title="Reload bundles">
