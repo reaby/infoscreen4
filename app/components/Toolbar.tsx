@@ -35,6 +35,8 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
     const [fillColor, setFillColor] = useState<RgbaColor>({ r: 56, g: 189, b: 248, a: 1 });
     const [strokeColor, setStrokeColor] = useState<RgbaColor>({ r: 0, g: 0, b: 0, a: 1 });
     const [strokeWidth, setStrokeWidth] = useState(0);
+    const [borderRadius, setBorderRadius] = useState(0);
+    const [radiusEnabled, setRadiusEnabled] = useState(false);
     const [fontFamily, setFontFamily] = useState("Arial");
     const [fontSize, setFontSize] = useState(24);
     const [bold, setBold] = useState(false);
@@ -168,12 +170,28 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
 
         const syncFromObject = () => {
             const obj = canvas.getActiveObject();
-            if (!obj) return;
+            if (!obj) {
+                setRadiusEnabled(false);
+                return;
+            }
             const fill = obj.get("fill");
             if (typeof fill === "string") { const c = parseToRgba(fill); if (c) setFillColor(c); }
             const stroke = obj.get("stroke");
             if (typeof stroke === "string") { const c = parseToRgba(stroke); if (c) setStrokeColor(c); }
             setStrokeWidth(obj.get("strokeWidth") ?? 0);
+
+            let radiusValue = 0;
+            let canRadius = false;
+            if (typeof (obj as any).rx === "number") {
+                radiusValue = obj.get("rx") ?? 0;
+                canRadius = true;
+            } else if (typeof (obj as any).borderRadius === "number") {
+                radiusValue = obj.get("borderRadius") ?? 0;
+                canRadius = true;
+            }
+            setBorderRadius(radiusValue);
+            setRadiusEnabled(canRadius);
+
             if (obj instanceof fabric.IText) {
                 setFontFamily(obj.get("fontFamily") ?? "Arial");
                 setFontSize(obj.get("fontSize") ?? 24);
@@ -185,10 +203,14 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
 
         canvas.on("selection:created", syncFromObject);
         canvas.on("selection:updated", syncFromObject);
+        canvas.on("selection:cleared", () => {
+            setRadiusEnabled(false);
+        });
 
         return () => {
             canvas.off("selection:created", syncFromObject);
             canvas.off("selection:updated", syncFromObject);
+            canvas.off("selection:cleared");
         };
     }, [canvas]);
 
@@ -202,6 +224,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
         // Row 4: blue→pink (~199°→330°)
         "#38bdf8", "#3b82f6", "#6366f1", "#a855f7", "#ec4899",
     ];
+
     const addRectangle = () => {
         if (!canvas) return;
 
@@ -216,30 +239,14 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
         canvas.requestRenderAll();
     };
 
-    const addCircle = () => {
-        if (!canvas) return;
-
-        const circle = new fabric.Circle({
-            left: 150,
-            top: 150,
-            radius: 50,
-            fill: "#fb7185",
-        });
-        canvas.add(circle);
-        canvas.requestRenderAll();
-    };
-
     const addText = () => {
-
         if (!canvas) return;
-
-        const text = new fabric.IText("Text", {
+        const text = new fabric.Textbox("Text", {
             left: 100,
             top: 100,
             fontSize: 24,
             fill: "#000000",
-            lockScalingX: true,
-            lockScalingY: true,
+            fontFamily: "Arial Black",
         });
         canvas.add(text);
         canvas.requestRenderAll();
@@ -374,6 +381,25 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
         const activeObject = canvas.getActiveObject();
         if (!activeObject) return;
         activeObject.set({ strokeWidth: width, paintFirst: "stroke" });
+        canvas.requestRenderAll();
+    };
+
+    const handleBorderRadiusChange = (value: number) => {
+        setBorderRadius(value);
+        if (!canvas) return;
+        const obj = canvas.getActiveObject();
+        if (!obj) return;
+        const props: Record<string, number> = {};
+        if (typeof (obj as any).rx === "number") {
+            props.rx = value;
+            props.ry = value;
+        } else if (typeof (obj as any).borderRadius === "number") {
+            props.borderRadius = value;
+        } else {
+            return;
+        }
+        obj.set(props);
+        obj.setCoords();
         canvas.requestRenderAll();
     };
 
@@ -547,6 +573,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
                     )}
                 </div>
                 <input type="number" min={0} max={100} value={strokeWidth} onChange={(e) => handleStrokeWidthChange(Number(e.target.value))} className="toolbar-number-input" disabled={!canvas} title="Stroke width" />
+                <input type="number" min={0} max={200} value={borderRadius} onChange={(e) => handleBorderRadiusChange(Number(e.target.value))} className="toolbar-number-input" disabled={!canvas || !radiusEnabled} title="Border radius" placeholder="Radius" />
             </div>
             <div className="toolbar-separator" />
             <div className="toolbar-group">

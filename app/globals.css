@@ -2058,3 +2058,38 @@ canvas {
     width: 100%;
     height: 100%;
 }
+
+.editor-scrollbar-horizontal {
+    position: absolute;
+    bottom: 0;
+}
+
+.editor-scrollbar-vertical {
+    position: absolute;
+    right: 0;
+}
+
+.editor-scrollbar-vertical > .editor-scrollbar-thumb {
+    border-radius: 8px;
+    width: 10px;
+    background-color: #48484860;
+}
+
+.editor-scrollbar-horizontal > .editor-scrollbar-thumb {
+    border-radius: 8px;
+    height: 10px;
+    background-color: #48484860;
+
+}
+
+.editor-scrollbar {
+    position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.editor-scrollbar-thumb:hover,
+.editor-scrollbar-thumb:active {
+    background-color: #48484885;
+
+}

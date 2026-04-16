@@ -33,6 +33,27 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
     const historyRef = useRef<string[]>([]);
     const historyIndexRef = useRef(-1);
     const isRestoringRef = useRef(false);
+    const [scrollbars, setScrollbars] = useState({
+        horizontalVisible: false,
+        verticalVisible: false,
+        thumbLeft: 0,
+        thumbTop: 0,
+        thumbWidth: 0,
+        thumbHeight: 0,
+    });
+    const scrollbarDragRef = useRef<{
+        type: "horizontal" | "vertical" | null;
+        startX: number;
+        startY: number;
+        startThumbLeft: number;
+        startThumbTop: number;
+    }>({
+        type: null,
+        startX: 0,
+        startY: 0,
+        startThumbLeft: 0,
+        startThumbTop: 0,
+    });
     const [contextMenu, setContextMenu] = useState({
         visible: false,
         x: 0,
@@ -55,6 +76,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         const height = Math.max(1, container.clientHeight);
         targetCanvas.setDimensions({ width, height });
         targetCanvas.calcOffset();
+        targetCanvas.requestRenderAll();
     }, []);
 
     const fitToBundle = useCallback((targetCanvas: fabric.Canvas) => {
@@ -96,6 +118,145 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         targetCanvas.requestRenderAll();
     }, [syncBackgroundLayer]);
 
+    const clampCanvasViewport = useCallback((targetCanvas: fabric.Canvas) => {
+        const zoom = targetCanvas.getZoom();
+        const viewportWidth = targetCanvas.getWidth();
+        const viewportHeight = targetCanvas.getHeight();
+        const contentWidth = Math.max(1, sizeRef.current.width) * zoom;
+        const contentHeight = Math.max(1, sizeRef.current.height) * zoom;
+        const vpt = targetCanvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
+
+        if (contentWidth <= viewportWidth) {
+            vpt[4] = (viewportWidth - contentWidth) / 2;
+        } else {
+            vpt[4] = Math.max(viewportWidth - contentWidth, Math.min(vpt[4], 0));
+        }
+        if (contentHeight <= viewportHeight) {
+            vpt[5] = (viewportHeight - contentHeight) / 2;
+        } else {
+            vpt[5] = Math.max(viewportHeight - contentHeight, Math.min(vpt[5], 0));
+        }
+
+        targetCanvas.setViewportTransform(vpt);
+        return vpt;
+    }, []);
+
+    const updateScrollbars = useCallback((targetCanvas: fabric.Canvas) => {
+        const viewportWidth = targetCanvas.getWidth();
+        const viewportHeight = targetCanvas.getHeight();
+        const zoom = targetCanvas.getZoom();
+        const contentWidth = Math.max(1, sizeRef.current.width) * zoom;
+        const contentHeight = Math.max(1, sizeRef.current.height) * zoom;
+        const vpt = targetCanvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
+
+        const horizontalVisible = contentWidth > viewportWidth + 1;
+        const verticalVisible = contentHeight > viewportHeight + 1;
+        const thumbWidth = horizontalVisible ? Math.max(24, (viewportWidth / contentWidth) * viewportWidth) : viewportWidth;
+        const thumbHeight = verticalVisible ? Math.max(24, (viewportHeight / contentHeight) * viewportHeight) : viewportHeight;
+        const maxScrollX = Math.max(0, contentWidth - viewportWidth);
+        const maxScrollY = Math.max(0, contentHeight - viewportHeight);
+        const thumbLeft = horizontalVisible ? Math.round(((-vpt[4]) / maxScrollX) * (viewportWidth - thumbWidth)) : 0;
+        const thumbTop = verticalVisible ? Math.round(((-vpt[5]) / maxScrollY) * (viewportHeight - thumbHeight)) : 0;
+
+        setScrollbars({
+            horizontalVisible,
+            verticalVisible,
+            thumbLeft,
+            thumbTop,
+            thumbWidth,
+            thumbHeight,
+        });
+    }, []);
+
+    const handleScrollbarPointerMove = useCallback((event: PointerEvent) => {
+        if (!canvas) return;
+        if (!scrollbarDragRef.current.type) return;
+
+        const zoom = canvas.getZoom();
+        const viewportWidth = canvas.getWidth();
+        const viewportHeight = canvas.getHeight();
+        const contentWidth = Math.max(1, sizeRef.current.width) * zoom;
+        const contentHeight = Math.max(1, sizeRef.current.height) * zoom;
+        const vpt = canvas.viewportTransform!;
+
+        if (scrollbarDragRef.current.type === "horizontal") {
+            const thumbWidth = Math.max(24, (viewportWidth / contentWidth) * viewportWidth);
+            const maxThumbLeft = viewportWidth - thumbWidth;
+            const nextLeft = Math.min(maxThumbLeft, Math.max(0, scrollbarDragRef.current.startThumbLeft + (event.clientX - scrollbarDragRef.current.startX)));
+            const ratio = maxThumbLeft > 0 ? nextLeft / maxThumbLeft : 0;
+            vpt[4] = -ratio * Math.max(0, contentWidth - viewportWidth);
+        }
+        if (scrollbarDragRef.current.type === "vertical") {
+            const thumbHeight = Math.max(24, (viewportHeight / contentHeight) * viewportHeight);
+            const maxThumbTop = viewportHeight - thumbHeight;
+            const nextTop = Math.min(maxThumbTop, Math.max(0, scrollbarDragRef.current.startThumbTop + (event.clientY - scrollbarDragRef.current.startY)));
+            const ratio = maxThumbTop > 0 ? nextTop / maxThumbTop : 0;
+            vpt[5] = -ratio * Math.max(0, contentHeight - viewportHeight);
+        }
+
+        canvas.setViewportTransform(vpt);
+        syncBackgroundLayer(canvas);
+        canvas.requestRenderAll();
+        updateScrollbars(canvas);
+    }, [canvas, syncBackgroundLayer, updateScrollbars]);
+
+    const handleScrollbarPointerUp = useCallback(() => {
+        scrollbarDragRef.current.type = null;
+        window.removeEventListener("pointermove", handleScrollbarPointerMove);
+        window.removeEventListener("pointerup", handleScrollbarPointerUp);
+    }, [handleScrollbarPointerMove]);
+
+    const handleScrollbarPointerDown = useCallback((type: "horizontal" | "vertical") => (event: any) => {
+        event.preventDefault();
+        const startThumbLeft = scrollbars.thumbLeft;
+        const startThumbTop = scrollbars.thumbTop;
+        scrollbarDragRef.current = {
+            type,
+            startX: event.clientX,
+            startY: event.clientY,
+            startThumbLeft,
+            startThumbTop,
+        };
+        window.addEventListener("pointermove", handleScrollbarPointerMove);
+        window.addEventListener("pointerup", handleScrollbarPointerUp);
+    }, [handleScrollbarPointerMove, handleScrollbarPointerUp, scrollbars.thumbLeft, scrollbars.thumbTop]);
+
+    const handleScrollbarTrackPointerDown = useCallback((type: "horizontal" | "vertical") => (event: any) => {
+        event.preventDefault();
+        if (!canvas) return;
+        const zoom = canvas.getZoom();
+        const viewportWidth = canvas.getWidth();
+        const viewportHeight = canvas.getHeight();
+        const contentWidth = Math.max(1, sizeRef.current.width) * zoom;
+        const contentHeight = Math.max(1, sizeRef.current.height) * zoom;
+        const vpt = canvas.viewportTransform!;
+
+        if (type === "horizontal") {
+            const thumbWidth = Math.max(24, (viewportWidth / contentWidth) * viewportWidth);
+            const rect = event.currentTarget.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const maxThumbLeft = Math.max(0, viewportWidth - thumbWidth);
+            const nextLeft = Math.min(maxThumbLeft, Math.max(0, clickX - thumbWidth / 2));
+            const ratio = maxThumbLeft > 0 ? nextLeft / maxThumbLeft : 0;
+            vpt[4] = -ratio * Math.max(0, contentWidth - viewportWidth);
+        }
+
+        if (type === "vertical") {
+            const thumbHeight = Math.max(24, (viewportHeight / contentHeight) * viewportHeight);
+            const rect = event.currentTarget.getBoundingClientRect();
+            const clickY = event.clientY - rect.top;
+            const maxThumbTop = Math.max(0, viewportHeight - thumbHeight);
+            const nextTop = Math.min(maxThumbTop, Math.max(0, clickY - thumbHeight / 2));
+            const ratio = maxThumbTop > 0 ? nextTop / maxThumbTop : 0;
+            vpt[5] = -ratio * Math.max(0, contentHeight - viewportHeight);
+        }
+
+        canvas.setViewportTransform(vpt);
+        syncBackgroundLayer(canvas);
+        canvas.requestRenderAll();
+        updateScrollbars(canvas);
+    }, [canvas, syncBackgroundLayer, updateScrollbars]);
+
     useEffect(() => {
         if (!canvasRef.current) {
             console.log("Canvas ref not ready");
@@ -106,6 +267,14 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             backgroundColor: "transparent",
             selection: true,
         });
+
+        fabric.InteractiveFabricObject.ownDefaults = {
+            ...fabric.InteractiveFabricObject.ownDefaults,
+            cornerStrokeColor: '#123',
+            transparentCorners: true,
+            padding: 0,
+            borderColor: "#123",
+        };
 
         resizeCanvasToContainer(canvas);
         fitToBundle(canvas);
@@ -210,8 +379,9 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         };
 
         const handleResize = () => {
-            resizeCanvasToContainer(canvas);
+            updateScrollbars(canvas);
             zoomCanvasToCenter(canvas, canvas.getZoom());
+            resizeCanvasToContainer(canvas);
         };
 
         window.addEventListener("resize", handleResize);
@@ -325,11 +495,17 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         };
 
         const handleScaling = (event: any) => {
-            if (event.target instanceof fabric.Textbox) {
-                event.target.scaleX = 1;
-                event.target.scaleY = 1;
-                return;
-            }
+            const target = event.target as any | null;
+            if (!target || !(target instanceof fabric.Textbox || target instanceof fabric.Rect)) return;
+            target.lockScalingFlip = true;
+            target.width = Math.max(1, target.width * target.scaleX);
+            target.height = Math.max(1, target.height * target.scaleY);
+            target.scaleX = 1;
+            target.scaleY = 1;
+            target.setCoords();
+            target.dirty = true;
+
+
         };
 
         const handleRotating = (event: any) => {
@@ -353,7 +529,10 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         canvas.on("mouse:up", handleMouseUp);
         canvas.on("object:scaling", handleScaling);
         canvas.on("object:rotating", handleRotating);
-        const handleAfterRender = () => syncBackgroundLayer(canvas);
+        const handleAfterRender = () => {
+            syncBackgroundLayer(canvas);
+            updateScrollbars(canvas);
+        };
         canvas.on("after:render", handleAfterRender);
 
         canvas.on("text:editing:entered", () => {
@@ -388,7 +567,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             canvas.off("object:modified", saveSnapshot);
             canvas.dispose();
         };
-    }, [fitToBundle, resizeCanvasToContainer, syncBackgroundLayer, zoomCanvasToCenter]);
+    }, [fitToBundle, resizeCanvasToContainer, syncBackgroundLayer, updateScrollbars, zoomCanvasToCenter]);
 
     const handleUndo = async () => {
         if (!canvas || isRestoringRef.current || historyIndexRef.current <= 0) return;
@@ -546,6 +725,36 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
                         }
                     }}
                 />
+                {scrollbars.horizontalVisible && (
+                    <div className="editor-scrollbar editor-scrollbar-horizontal" onPointerDown={handleScrollbarTrackPointerDown("horizontal")}>
+                        <div
+                            className="editor-scrollbar-thumb"
+                            style={{
+                                width: `${scrollbars.thumbWidth}px`,
+                                transform: `translateX(${scrollbars.thumbLeft}px)`,
+                            }}
+                            onPointerDown={(event) => {
+                                event.stopPropagation();
+                                handleScrollbarPointerDown("horizontal")(event);
+                            }}
+                        />
+                    </div>
+                )}
+                {scrollbars.verticalVisible && (
+                    <div className="editor-scrollbar editor-scrollbar-vertical" onPointerDown={handleScrollbarTrackPointerDown("vertical")}>
+                        <div
+                            className="editor-scrollbar-thumb"
+                            style={{
+                                height: `${scrollbars.thumbHeight}px`,
+                                transform: `translateY(${scrollbars.thumbTop}px)`,
+                            }}
+                            onPointerDown={(event) => {
+                                event.stopPropagation();
+                                handleScrollbarPointerDown("vertical")(event);
+                            }}
+                        />
+                    </div>
+                )}
                 {missingAssetNoticeVisible && (
                     <div
                         style={{
