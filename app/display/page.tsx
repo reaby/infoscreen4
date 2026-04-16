@@ -36,20 +36,22 @@ export default function DisplayPage() {
 
         const seq = ++loadSeqRef.current;
 
-        // // Fetch bundle meta and slide JSON in parallel when not provided by socket
-        // Promise.all([
-        //     fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
-        //         .then((r) => r.json()).catch(() => ({})),
-        //     fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
-        //         .then((r) => r.json()).catch(() => null),
-        // ]).then(([meta, json]) => {
-        //     if (loadSeqRef.current !== seq) return;
-        //     setBundleMeta(meta ?? {});
-        //     // Keep the previous rendered slide if the new fetch fails transiently.
-        //     if (json) {
-        //         setDisplayJson(json);
-        //     }
-        // });
+        Promise.all([
+            hasSocketMeta
+                ? Promise.resolve(active.bundleMeta as BundleMeta)
+                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
+                    .then((r) => r.json()).catch(() => ({})),
+            hasSocketJson
+                ? Promise.resolve(active.json)
+                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
+                    .then((r) => r.json()).catch(() => null),
+        ]).then(([meta, json]) => {
+            if (loadSeqRef.current !== seq) return;
+            setBundleMeta((meta ?? {}) as BundleMeta);
+            if (json) {
+                setDisplayJson(json);
+            }
+        });
     }, [state.activeSlide]);
 
     // Apply live meta updates pushed from admin (only when it's the active bundle)
