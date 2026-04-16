@@ -23,22 +23,33 @@ export default function DisplayPage() {
             });
             return;
         }
+
+        const hasSocketJson = active.json != null;
+        const hasSocketMeta = active.bundleMeta != null;
+        if (hasSocketJson && hasSocketMeta) {
+            defer(() => {
+                setBundleMeta(active.bundleMeta as BundleMeta);
+                setDisplayJson(active.json as object);
+            });
+            return;
+        }
+
         const seq = ++loadSeqRef.current;
 
-        // Fetch bundle meta and slide JSON in parallel
-        Promise.all([
-            fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
-                .then((r) => r.json()).catch(() => ({})),
-            fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
-                .then((r) => r.json()).catch(() => null),
-        ]).then(([meta, json]) => {
-            if (loadSeqRef.current !== seq) return;
-            setBundleMeta(meta ?? {});
-            // Keep the previous rendered slide if the new fetch fails transiently.
-            if (json) {
-                setDisplayJson(json);
-            }
-        });
+        // // Fetch bundle meta and slide JSON in parallel when not provided by socket
+        // Promise.all([
+        //     fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
+        //         .then((r) => r.json()).catch(() => ({})),
+        //     fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
+        //         .then((r) => r.json()).catch(() => null),
+        // ]).then(([meta, json]) => {
+        //     if (loadSeqRef.current !== seq) return;
+        //     setBundleMeta(meta ?? {});
+        //     // Keep the previous rendered slide if the new fetch fails transiently.
+        //     if (json) {
+        //         setDisplayJson(json);
+        //     }
+        // });
     }, [state.activeSlide]);
 
     // Apply live meta updates pushed from admin (only when it's the active bundle)

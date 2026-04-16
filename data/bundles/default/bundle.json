@@ -5,11 +5,11 @@
   "autoScale": false,
   "slides": [
     {
-      "file": "testing2.json",
+      "file": "test.json",
       "active": true
     },
     {
-      "file": "test.json",
+      "file": "testing2.json",
       "active": true
     }
   ],

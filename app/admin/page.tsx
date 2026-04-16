@@ -90,6 +90,7 @@ export default function AdminDashboard() {
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
     const bundleMetaRef = useRef<BundleMeta>({});
+    const liveLoadSeqRef = useRef(0);
 
     useEffect(() => {
         bundleMetaRef.current = bundleMeta;
@@ -188,13 +189,37 @@ export default function AdminDashboard() {
             });
             return;
         }
+
+        const hasSocketJson = active.json != null;
+        const hasSocketMeta = active.bundleMeta != null;
+
+        if (hasSocketJson || hasSocketMeta) {
+            defer(() => {
+                if (hasSocketMeta) {
+                    setLiveBundleMeta(active.bundleMeta as BundleMeta);
+                }
+                if (hasSocketJson) {
+                    setLiveJson(active.json as object | null);
+                }
+            });
+            if (hasSocketJson && hasSocketMeta) {
+                return;
+            }
+        }
+
+        const seq = ++liveLoadSeqRef.current;
         Promise.all([
-            fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
-                .then((r) => r.json()).catch(() => ({})),
-            fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
-                .then((r) => r.json()).catch(() => null),
+            hasSocketMeta
+                ? Promise.resolve(active.bundleMeta)
+                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
+                    .then((r) => r.json()).catch(() => ({})),
+            hasSocketJson
+                ? Promise.resolve(active.json)
+                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
+                    .then((r) => r.json()).catch(() => null),
         ]).then(([meta, json]) => {
-            setLiveBundleMeta(meta ?? {});
+            if (liveLoadSeqRef.current !== seq) return;
+            setLiveBundleMeta((meta ?? {}) as BundleMeta);
             setLiveJson(json);
         });
     }, [state.activeSlide]);
@@ -431,7 +456,7 @@ export default function AdminDashboard() {
                                         className="ad-list-item-name-btn"
                                         onClick={() => { setSelectedBundle(b.name); setSelectedSlide(null); }}
                                     >
-                                        <span className="ad-list-item-name">{b.name}</span>
+                                        <span className="">{b.name}</span>
                                     </button>
                                     <span className="ad-list-item-count">{b.slides.length}</span>
                                     <button
@@ -502,7 +527,9 @@ export default function AdminDashboard() {
                                 }}
                             >
                                 <div className={`ad-list-item ad-list-item-draggable ${selectedSlide === slide ? "selected" : ""} ${isActive(selectedBundle!, slide) ? "playing" : ""} ${isDragging ? "dragging" : ""} ${isDragOver ? "drag-over" : ""}`} title="Drag to reorder">
-                                    {isActive(selectedBundle!, slide) && <Play size={10} className="ad-playing-icon" />}
+                                    <span className="ad-playing-icon-placeholder">
+                                        {isActive(selectedBundle!, slide) ? <Play size={14} className="ad-playing-icon" /> : null}
+                                    </span>
                                     <span className="ad-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{slide}</span>
                                     <button
                                         className={`ad-slide-toggle${isEnabled ? " on" : ""}`}

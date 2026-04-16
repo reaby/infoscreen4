@@ -57,7 +57,7 @@ export async function loadFabricJsonSafely(canvas: fabric.Canvas | fabric.Static
     try {
         const parsed = typeof json === "string" ? JSON.parse(json) : json;
         const cleaned = await cleanFabricValue(parsed, new Map(), stats);
-        await canvas.loadFromJSON(cleaned);
+        await canvas.loadFromJSON(cleaned as string | Record<string, any>);
         return { loaded: true, missingAssets: stats.missingAssets };
     } catch (error) {
         console.warn("Fabric JSON load failed; clearing canvas and ignoring missing image assets.", error);

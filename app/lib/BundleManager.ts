@@ -24,6 +24,15 @@ export class BundleManager {
         return meta;
     }
 
+    getSlideJson(bundle: string, slide: string): object | null {
+        const filePath = path.join(this.slidesDir(bundle), this.fileFromSlide(slide));
+        try {
+            return JSON.parse(readFileSync(filePath, "utf8")) as object;
+        } catch {
+            return null;
+        }
+    }
+
     patchMeta(bundle: string, patch: Partial<BundleMeta>): BundleMeta {
         const existing = this.readRawMeta(bundle);
         const merged = { ...existing, ...patch } as RawMeta;

@@ -45,6 +45,19 @@ function getServerState(): ServerState {
     };
 }
 
+interface EnrichedSlide extends ActiveSlide {
+    json?: object | null;
+    bundleMeta?: unknown;
+}
+
+function enrichSlideData(slide: ActiveSlide): EnrichedSlide {
+    return {
+        ...slide,
+        json: bundleManager.getSlideJson(slide.bundle, slide.slide),
+        bundleMeta: bundleManager.getMeta(slide.bundle),
+    };
+}
+
 function getBundleSlides(bundle: string): CycleSlide[] {
     return bundleManager.getOrderedSlides(bundle, { activeOnly: true });
 }
@@ -125,7 +138,7 @@ app.prepare().then(() => {
 
             // Send current slide immediately on connect
             if (activeSlide) {
-                socket.emit("slide:show", activeSlide);
+                socket.emit("slide:show", enrichSlideData(activeSlide));
             }
 
             socket.on("disconnect", () => {
@@ -143,7 +156,7 @@ app.prepare().then(() => {
             socket.on("slide:show", (data: ActiveSlide) => {
                 activeSlide = data;
                 activeBundle = data.bundle;
-                io.emit("slide:show", activeSlide);
+                io.emit("slide:show", enrichSlideData(data));
                 startCycle(data);
                 io.emit("state:sync", getServerState());
             });
@@ -205,7 +218,7 @@ app.prepare().then(() => {
                     if (!keepCurrent) {
                         const first = slides[0];
                         activeSlide = { bundle, slide: first.slide, duration: resolveSlideDuration(first, duration) };
-                        io.emit("slide:show", activeSlide);
+                        io.emit("slide:show", enrichSlideData(activeSlide));
                     }
                 }
 

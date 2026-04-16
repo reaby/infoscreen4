@@ -9,6 +9,8 @@ export interface ActiveSlide {
     bundle: string;
     slide: string;
     duration: number;
+    json?: object | null;
+    bundleMeta?: Record<string, unknown>;
 }
 
 export interface BundleMetaUpdate {
