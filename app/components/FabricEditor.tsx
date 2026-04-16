@@ -289,17 +289,45 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             historyIndexRef.current = historyRef.current.length - 1;
         };
 
-        // Zoom functionality with Ctrl+mouse wheel
+        // Zoom or pan functionality with mouse wheel
         const handleWheel = (event: any) => {
             const e = (event as any).e;
-            // Only zoom if Ctrl (or Cmd on Mac) is pressed
-            if (!e.ctrlKey && !e.metaKey) return;
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                const zoom = canvas.getZoom() + delta;
+                const clampedZoom = Math.max(0.1, Math.min(5, zoom));
+                zoomCanvasToCenter(canvas, clampedZoom);
+                return;
+            }
 
+            // Normal wheel scroll pans the canvas viewport
             e.preventDefault();
-            const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            const zoom = canvas.getZoom() + delta;
-            const clampedZoom = Math.max(0.1, Math.min(5, zoom));
-            zoomCanvasToCenter(canvas, clampedZoom);
+            const vpt = canvas.viewportTransform!;
+            vpt[4] -= e.deltaX*0.33;
+            vpt[5] -= e.deltaY*0.33
+
+            const zoom = canvas.getZoom();
+            const viewportWidth = canvas.getWidth();
+            const viewportHeight = canvas.getHeight();
+            const zoomedWidth = sizeRef.current.width * zoom;
+            const zoomedHeight = sizeRef.current.height * zoom;
+
+            if (zoomedWidth <= viewportWidth) {
+                vpt[4] = (viewportWidth - zoomedWidth) / 2;
+            } else {
+                vpt[4] = Math.max(viewportWidth - zoomedWidth, Math.min(vpt[4], 0));
+            }
+            if (zoomedHeight <= viewportHeight) {
+                vpt[5] = (viewportHeight - zoomedHeight) / 2;
+            } else {
+                vpt[5] = Math.max(viewportHeight - zoomedHeight, Math.min(vpt[5], 0));
+            }
+
+            canvas.setViewportTransform(vpt);
+            syncBackgroundLayer(canvas);
+            updateScrollbars(canvas);
+            canvas.requestRenderAll();
         };
 
         // Panning functionality using Fabric canvas events
