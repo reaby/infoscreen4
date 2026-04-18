@@ -89,31 +89,31 @@ export default function UserManager() {
     }, [loadUsers, users.length]);
 
     return (
-        <div className="ad-settings-panel ad-user-panel">
-            <div className="ad-user-panel-header">
+        <div className="admin-settings-panel admin-user-panel">
+            <div className="admin-user-panel-header">
                 <div>
-                    <div className="ad-user-panel-title">User management</div>
-                    <div className="ad-user-panel-subtitle">Create and remove local users stored in <code>data/users.json</code>.</div>
+                    <div className="admin-user-panel-title">User management</div>
+                    <div className="admin-user-panel-subtitle">Create and remove local users stored in <code>data/users.json</code>.</div>
                 </div>
-                <span className="ad-user-badge">{users.length} user{users.length === 1 ? "" : "s"}</span>
+                <span className="admin-user-badge">{users.length} user{users.length === 1 ? "" : "s"}</span>
             </div>
 
-            <div className="ad-user-form">
-                <label className="ad-user-field">
+            <div className="admin-user-form">
+                <label className="admin-user-field">
                     Username
                     <input
                         type="text"
-                        className="ad-settings-input"
+                        className="admin-settings-input"
                         value={newUserName}
                         onChange={(e) => setNewUserName(e.target.value)}
                         disabled={loading}
                     />
                 </label>
-                <label className="ad-user-field">
+                <label className="admin-user-field">
                     Password
                     <input
                         type="password"
-                        className="ad-settings-input"
+                        className="admin-settings-input"
                         value={newUserPassword}
                         onChange={(e) => setNewUserPassword(e.target.value)}
                         disabled={loading}
@@ -129,18 +129,18 @@ export default function UserManager() {
                 </button>
             </div>
 
-            <div className="ad-user-list">
+            <div className="admin-user-list">
                 {loading ? (
-                    <div className="ad-user-empty">Loading users…</div>
+                    <div className="admin-user-empty">Loading users…</div>
                 ) : users.length === 0 ? (
-                    <div className="ad-user-empty">No users found.</div>
+                    <div className="admin-user-empty">No users found.</div>
                 ) : (
                     <ul>
                         {users.map((user) => (
-                            <li key={user.username} className="ad-user-row">
+                            <li key={user.username} className="admin-user-row">
                                 <span>{user.username}</span>
                                 <button
-                                    className="ad-user-delete-btn"
+                                    className="admin-user-delete-btn"
                                     type="button"
                                     disabled={loading || users.length <= 1}
                                     onClick={() => handleDeleteUser(user.username)}

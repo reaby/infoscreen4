@@ -20,23 +20,23 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
 
     return (
         <>
-            <div className="ad-settings-panel">
+            <div className="admin-settings-panel">
                 {/* ── Display dimensions ────────────── */}
-                <div className="ad-settings-group">
-                    <label className="ad-settings-label">Display dimensions</label>
-                    <div className="ad-settings-row">
-                        <label className="ad-label">W</label>
+                <div className="admin-settings-group">
+                    <label className="admin-settings-label">Display dimensions</label>
+                    <div className="admin-settings-row">
+                        <label className="admin-label">W</label>
                         <input
                             type="number" min={1} max={7680}
-                            className="ad-settings-input"
+                            className="admin-settings-input"
                             style={{ width: 80 }}
                             value={metaDraft.width ?? 1920}
                             onChange={(e) => setMetaDraft((d) => ({ ...d, width: Number(e.target.value) || undefined }))}
                         />
-                        <label className="ad-label">H</label>
+                        <label className="admin-label">H</label>
                         <input
                             type="number" min={1} max={4320}
-                            className="ad-settings-input"
+                            className="admin-settings-input"
                             style={{ width: 80 }}
                             value={metaDraft.height ?? 1080}
                             onChange={(e) => setMetaDraft((d) => ({ ...d, height: Number(e.target.value) || undefined }))}
@@ -47,10 +47,10 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                             title="Reset to 1920×1080"
                         >1920×1080</button>
                     </div>
-                    <div className="ad-settings-row" style={{ marginTop: 4 }}>
+                    <div className="admin-settings-row" style={{ marginTop: 4 }}>
                         <button
                             type="button"
-                            className={`ad-slide-toggle ${(metaDraft.autoScale ?? false) ? "on" : ""}`}
+                            className={`admin-slide-toggle ${(metaDraft.autoScale ?? false) ? "on" : ""}`}
                             role="checkbox"
                             aria-checked={metaDraft.autoScale ?? false}
                             aria-label="Auto-scale to fit display"
@@ -59,15 +59,15 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                         >
                             {(metaDraft.autoScale ?? false) ? "✓" : "–"}
                         </button>
-                        <span className="ad-label">Auto-scale to fit display</span>
+                        <span className="admin-label">Auto-scale to fit display</span>
                     </div>
-                    <p className="ad-settings-hint">When off, the display renders at exact pixel dimensions. When on, scales to fill the screen.</p>
-                    <div className="ad-settings-group" style={{ marginTop: 8 }}>
-                        <label className="ad-settings-label">Global slide duration</label>
-                        <div className="ad-settings-row">
+                    <p className="admin-settings-hint">When off, the display renders at exact pixel dimensions. When on, scales to fill the screen.</p>
+                    <div className="admin-settings-group" style={{ marginTop: 8 }}>
+                        <label className="admin-settings-label">Global slide duration</label>
+                        <div className="admin-settings-row">
                             <input
                                 type="number" max={3600}
-                                className="ad-settings-input"
+                                className="admin-settings-input"
                                 style={{ width: 90 }}
                                 value={metaDraft.defaultDuration ?? ""}
                                 placeholder="10"
@@ -84,25 +84,25 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                                     }));
                                 }}
                             />
-                            <span className="ad-label">s (≤0 = manual)</span>
+                            <span className="admin-label">s (≤0 = manual)</span>
                         </div>
                     </div>
                 </div>
 
                 {/* ── Background colour / CSS ────────── */}
-                <div className="ad-settings-group">
-                    <label className="ad-settings-label">Background colour / CSS</label>
-                    <div className="ad-settings-row">
+                <div className="admin-settings-group">
+                    <label className="admin-settings-label">Background colour / CSS</label>
+                    <div className="admin-settings-row">
                         <input
                             type="color"
-                            className="ad-color-swatch"
+                            className="admin-color-swatch"
                             value={metaDraft.backgroundColor?.match(/^#[0-9a-fA-F]{6}$/) ? metaDraft.backgroundColor : "#000000"}
                             onChange={(e) => setMetaDraft((d) => ({ ...d, backgroundColor: e.target.value }))}
                             title="Pick a solid colour"
                         />
                         <input
                             type="text"
-                            className="ad-settings-input"
+                            className="admin-settings-input"
                             placeholder="#000000 or any CSS value…"
                             value={metaDraft.backgroundColor ?? ""}
                             key={selectedBundle}
@@ -110,19 +110,19 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                         />
                         {metaDraft.backgroundColor && (
                             <button
-                                className="ad-settings-clear"
+                                className="admin-settings-clear"
                                 onClick={() => setMetaDraft((d) => ({ ...d, backgroundColor: undefined }))}
                                 title="Clear"
                             >✕</button>
                         )}
                     </div>
-                    <p className="ad-settings-hint">Any CSS <code>background</code> value — colour, gradient, url(…)</p>
+                    <p className="admin-settings-hint">Any CSS <code>background</code> value — colour, gradient, url(…)</p>
                 </div>
 
                 {/* ── Background media file ──────────── */}
-                <div className="ad-settings-group">
-                    <label className="ad-settings-label">Background media file</label>
-                    <div className="ad-settings-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <div className="admin-settings-group">
+                    <label className="admin-settings-label">Background media file</label>
+                    <div className="admin-settings-row" style={{ gap: 8, flexWrap: "wrap" }}>
                         <div style={{ display: "flex", gap: 4 }}>
                             {(["backgrounds"] as const).map((mode) => (
                                 <button
@@ -136,12 +136,12 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                             ))}
                         </div>
                         <button
-                            className="ad-settings-input ad-settings-file-display ad-settings-file-pick"
+                            className="admin-settings-input admin-settings-file-display admin-settings-file-pick"
                             onClick={() => setShowFileMgr(true)}
                             title="Click to browse files"
                         >
                             {metaDraft.backgroundFile
-                                ? <span className="ad-settings-file-name">{metaDraft.backgroundFile}</span>
+                                ? <span className="admin-settings-file-name">{metaDraft.backgroundFile}</span>
                                 : <em>None selected — click to browse</em>}
                         </button>
                         {metaDraft.backgroundFile && (<>
@@ -159,21 +159,21 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                             >Remove</button>
                         </>)}
                     </div>
-                    <p className="ad-settings-hint">Takes priority over background colour. Videos loop automatically.</p>
+                    <p className="admin-settings-hint">Takes priority over background colour. Videos loop automatically.</p>
                 </div>
 
-                <div className="ad-settings-actions">
+                <div className="admin-settings-actions">
                     <button
-                        className="ad-show-btn"
+                        className="admin-show-btn"
                         onClick={() => saveMeta(metaDraft)}
                     >Save</button>
                     <button
-                        className="ad-settings-reset"
+                        className="admin-settings-reset"
                         onClick={() => setMetaDraft(bundleMeta)}
                     >Reset</button>
                     {(bundleMeta.backgroundColor || bundleMeta.backgroundFile) && (
                         <button
-                            className="ad-stop-btn"
+                            className="admin-stop-btn"
                             onClick={() => saveMeta({ backgroundColor: undefined, backgroundFile: undefined })}
                             title="Remove all backgrounds from this bundle"
                         >Remove background</button>

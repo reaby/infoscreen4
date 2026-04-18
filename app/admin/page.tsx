@@ -407,43 +407,43 @@ export default function AdminDashboard() {
 
     return (
         <>
-        <div className="ad-layout">
+        <div className="admin-layout">
 
             {/* ── Header ─────────────────────────────── */}
-            <header className="ad-header">
-                <div className="ad-header-brand">
-                    <span className="ad-brand-text">Infoscreen<em>4</em></span>
-                    <span className="ad-brand-sub">Admin</span>
+            <header className="admin-header">
+                <div className="admin-header-brand">
+                    <span className="admin-brand-text">Infoscreen<em>4</em></span>
+                    <span className="admin-brand-sub">Admin</span>
                 </div>
 
-                <div className="ad-header-status">
-                    <span className={`ad-ws-pill ${connected ? "ok" : "off"}`}>
-                        <span className="ad-ws-dot" />
+                <div className="admin-header-status">
+                    <span className={`admin-ws-pill ${connected ? "ok" : "off"}`}>
+                        <span className="admin-ws-dot" />
                         {connected ? "Connected" : "Disconnected"}
                     </span>
-                    <span className="ad-display-pill">
+                    <span className="admin-display-pill">
                         {state.connectedDisplays > 0
                             ? <><Monitor size={13} />&nbsp;{state.connectedDisplays} display{state.connectedDisplays !== 1 ? "s" : ""}</>
                             : <><MonitorOff size={13} />&nbsp;No displays</>}
                     </span>
                     {selectedDisplayConfig && (
-                        <span className="ad-now-pill">
+                        <span className="admin-now-pill">
                             {selectedDisplayConfig.name}
                         </span>
                     )}
                     {selectedDisplayState && (
-                        <span className="ad-now-pill">
+                        <span className="admin-now-pill">
                             <Play size={11} />
                             &nbsp;{selectedDisplayState.bundle}&nbsp;/&nbsp;<strong>{selectedDisplayState.slide}</strong>
                         </span>
                     )}
                 </div>
 
-                <nav className="ad-header-nav">
+                <nav className="admin-header-nav">
                     {state.displayConfigs.length > 0 && (
                         <>
                             <select
-                                className="ad-display-select"
+                                className="admin-display-select"
                                 value={effectiveSelectedDisplay ?? ""}
                                 onChange={(e) => setSelectedDisplay(e.target.value)}
                                 title="Select display"
@@ -454,13 +454,13 @@ export default function AdminDashboard() {
                             </select>
                         </>
                     )}
-                    <button className="ad-nav-btn" onClick={loadBundles} title="Refresh">
+                    <button className="admin-nav-btn" onClick={loadBundles} title="Refresh">
                         <RefreshCw size={13} />
                     </button>
 
-                    <div className="ad-user-menu" ref={userMenuRef}>
+                    <div className="admin-user-menu" ref={userMenuRef}>
                         <button
-                            className="ad-nav-btn ad-user-menu-trigger"
+                            className="admin-nav-btn admin-user-menu-trigger"
                             type="button"
                             onClick={() => setUserMenuOpen((current) => !current)}
                             title="User menu"
@@ -470,11 +470,11 @@ export default function AdminDashboard() {
                             <ChevronDown size={12} />
                         </button>
                         {userMenuOpen && (
-                            <div className="ad-user-menu-popover">
-                                <div className="ad-user-menu-title">Signed in as</div>
-                                <div className="ad-user-menu-username">{currentUser ?? "unknown"}</div>
+                            <div className="admin-user-menu-popover">
+                                <div className="admin-user-menu-title">Signed in as</div>
+                                <div className="admin-user-menu-username">{currentUser ?? "unknown"}</div>
                                 <button
-                                    className="ad-user-menu-item"
+                                    className="admin-user-menu-item"
                                     type="button"
                                     onClick={() => {
                                         setPreviewTab("users");
@@ -483,7 +483,7 @@ export default function AdminDashboard() {
                                 >
                                     Users
                                 </button>
-                                <button className="ad-user-menu-item" type="button" onClick={handleLogout}>
+                                <button className="admin-user-menu-item" type="button" onClick={handleLogout}>
                                     Logout
                                 </button>
                             </div>
@@ -494,30 +494,30 @@ export default function AdminDashboard() {
 
 
             {/* ── Main 3-column area ─────────────────── */}
-            <main className="ad-main">
+            <main className="admin-main">
 
                 {/* Column 1 – Bundles */}
-                <aside className="ad-col ad-col-bundles">
-                    <div className="ad-col-header">
+                <aside className="admin-col admin-col-bundles">
+                    <div className="admin-col-header">
                         <span>Bundles</span>
-                        <button className="ad-icon-btn" onClick={handleNewBundle} title="New bundle">
+                        <button className="admin-icon-btn" onClick={handleNewBundle} title="New bundle">
                             <FolderPlus size={14} />
                         </button>
                     </div>
-                    <ul className="ad-list">
-                        {bundles.length === 0 && <li className="ad-list-empty">No bundles</li>}
+                    <ul className="admin-list">
+                        {bundles.length === 0 && <li className="admin-list-empty">No bundles</li>}
                         {bundles.map((b) => (
                             <li key={b.name}>
-                                <div className={`ad-list-item ${selectedBundle === b.name ? "selected" : ""}`}>
+                                <div className={`admin-list-item ${selectedBundle === b.name ? "selected" : ""}`}>
                                     <button
-                                        className="ad-list-item-name-btn"
+                                        className="admin-list-item-name-btn"
                                         onClick={() => { setSelectedBundle(b.name); setSelectedSlide(null); }}
                                     >
                                         <span className="">{b.name}</span>
                                     </button>
-                                    <span className="ad-list-item-count">{b.slides.length}</span>
+                                    <span className="admin-list-item-count">{b.slides.length}</span>
                                     <button
-                                        className={`ad-bundle-active-btn${selectedDisplayState?.bundle === b.name ? " on" : ""}`}
+                                        className={`admin-bundle-active-btn${selectedDisplayState?.bundle === b.name ? " on" : ""}`}
                                         onClick={() => selectedDisplay && activateBundle(b.name, selectedDisplay)}
                                         title={selectedDisplayState?.bundle === b.name ? "Active bundle" : "Set as active bundle"}
                                     >
@@ -530,14 +530,14 @@ export default function AdminDashboard() {
                 </aside>
 
                 {/* Column 2 – Slides */}
-                <aside className="ad-col ad-col-slides">
-                    <div className="ad-col-header">
+                <aside className="admin-col admin-col-slides">
+                    <div className="admin-col-header">
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span>Slides</span>
 
                         </div>
                             <button
-                                className="ad-icon-btn"
+                                className="admin-icon-btn"
                                 onClick={() => {
                                     if (!selectedBundle) return;
                                     router.push(`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}`);
@@ -548,9 +548,9 @@ export default function AdminDashboard() {
                                 <FilePlus size={14} />
                             </button>
                     </div>
-                    <ul className="ad-list">
-                        {!selectedBundle && <li className="ad-list-empty">Select a bundle</li>}
-                        {selectedBundle && slides.length === 0 && <li className="ad-list-empty">No slides</li>}
+                    <ul className="admin-list">
+                        {!selectedBundle && <li className="admin-list-empty">Select a bundle</li>}
+                        {selectedBundle && slides.length === 0 && <li className="admin-list-empty">No slides</li>}
                         {slides.map((slide) => {
                             const existingEntry = entryBySlide.get(slide);
                             const isEnabled = existingEntry?.active !== false;
@@ -583,13 +583,13 @@ export default function AdminDashboard() {
                                     setDragOverSlide(null);
                                 }}
                             >
-                                <div className={`ad-list-item ad-list-item-draggable ${selectedSlide === slide ? "selected" : ""} ${isActive(selectedBundle!, slide) ? "playing" : ""} ${isDragging ? "dragging" : ""} ${isDragOver ? "drag-over" : ""}`} title="Drag to reorder">
-                                    <span className="ad-playing-icon-placeholder">
-                                        {isActive(selectedBundle!, slide) ? <Play size={14} className="ad-playing-icon" /> : null}
+                                <div className={`admin-list-item admin-list-item-draggable ${selectedSlide === slide ? "selected" : ""} ${isActive(selectedBundle!, slide) ? "playing" : ""} ${isDragging ? "dragging" : ""} ${isDragOver ? "drag-over" : ""}`} title="Drag to reorder">
+                                    <span className="admin-playing-icon-placeholder">
+                                        {isActive(selectedBundle!, slide) ? <Play size={14} className="admin-playing-icon" /> : null}
                                     </span>
-                                    <span className="ad-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{slide}</span>
+                                    <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{slide}</span>
                                     <button
-                                        className={`ad-slide-toggle${isEnabled ? " on" : ""}`}
+                                        className={`admin-slide-toggle${isEnabled ? " on" : ""}`}
                                         title={isEnabled ? "Remove from cycle" : "Add to cycle"}
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -610,16 +610,16 @@ export default function AdminDashboard() {
                 </aside>
 
                 {/* Column 3 – Preview + details */}
-                <section className="ad-col ad-col-preview">
-                    <div className="ad-col-header">
-                        <div className="ad-preview-header-row">
-                            <div className="ad-preview-tabs-left">
+                <section className="admin-col admin-col-preview">
+                    <div className="admin-col-header">
+                        <div className="admin-preview-header-row">
+                            <div className="admin-preview-tabs-left">
                                 <button
-                                    className={`ad-preview-tab ${previewTab === "preview" ? "active" : ""}`}
+                                    className={`admin-preview-tab ${previewTab === "preview" ? "active" : ""}`}
                                     onClick={() => setPreviewTab("preview")}
                                 >Preview</button>
                                 <button
-                                    className={`ad-preview-tab ${previewTab === "settings" ? "active" : ""}`}
+                                    className={`admin-preview-tab ${previewTab === "settings" ? "active" : ""}`}
                                     onClick={() => setPreviewTab("settings")}
                                     disabled={!selectedBundle}
                                     title="Bundle settings"
@@ -628,7 +628,7 @@ export default function AdminDashboard() {
                                 </button>
                                 {state.displayConfigs.length > 0 && (
                                     <button
-                                        className={`ad-preview-tab ${previewTab === "displays" ? "active" : ""}`}
+                                        className={`admin-preview-tab ${previewTab === "displays" ? "active" : ""}`}
                                         type="button"
                                         onClick={() => setPreviewTab("displays")}
                                         title="Display settings"
@@ -639,10 +639,10 @@ export default function AdminDashboard() {
                             </div>
 
                             <button
-                                className={`ad-preview-tab ad-preview-tab-live-edge ${previewTab === "live" ? "active" : ""} ${selectedDisplayState ? "live" : ""}`}
+                                className={`admin-preview-tab admin-preview-tab-live-edge ${previewTab === "live" ? "active" : ""} ${selectedDisplayState ? "live" : ""}`}
                                 onClick={() => setPreviewTab("live")}
                             >
-                                {selectedDisplayState && <span className="ad-live-dot" />}Live
+                                {selectedDisplayState && <span className="admin-live-dot" />}Live
                             </button>
                         </div>
                     </div>
@@ -658,35 +658,35 @@ export default function AdminDashboard() {
                     ) : previewTab === "users" ? (
                         <UserManager />
                     ) : previewTab === "displays" ? (
-                        <div className="ad-display-config-panel">
-                            <div className="ad-display-config-header">
+                        <div className="admin-display-config-panel">
+                            <div className="admin-display-config-header">
                                 <strong>Display configuration</strong>
                             </div>
                             {displayDrafts.map((config, index) => (
-                                <div className="ad-display-config-row" key={config.id}>
-                                    <div className="ad-display-config-field">
-                                        <label className="ad-label">ID</label>
+                                <div className="admin-display-config-row" key={config.id}>
+                                    <div className="admin-display-config-field">
+                                        <label className="admin-label">ID</label>
                                         <input
                                             value={config.id}
                                             onChange={(e) => {
                                                 const nextId = e.target.value.trim();
                                                 setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, id: nextId || item.id } : item));
                                             }}
-                                            className="ad-settings-input"
+                                            className="admin-settings-input"
                                             style={{ width: 100 }}
                                         />
                                     </div>
-                                    <div className="ad-display-config-field">
-                                        <label className="ad-label">Name</label>
+                                    <div className="admin-display-config-field">
+                                        <label className="admin-label">Name</label>
                                         <input
                                             value={config.name}
                                             onChange={(e) => setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, name: e.target.value } : item))}
-                                            className="ad-settings-input"
+                                            className="admin-settings-input"
                                             style={{ width: 180 }}
                                         />
                                     </div>
                                     <button
-                                        className="ad-nav-btn"
+                                        className="admin-nav-btn"
                                         type="button"
                                         onClick={() => setDisplayDrafts((current) => current.filter((_, idx) => idx !== index))}
                                         disabled={displayDrafts.length <= 1}
@@ -696,9 +696,9 @@ export default function AdminDashboard() {
                                     </button>
                                 </div>
                             ))}
-                            <div className="ad-display-config-actions">
+                            <div className="admin-display-config-actions">
                                 <button
-                                    className="ad-nav-btn"
+                                    className="admin-nav-btn"
                                     type="button"
                                     onClick={() => setDisplayDrafts((current) => [
                                         ...current,
@@ -708,7 +708,7 @@ export default function AdminDashboard() {
                                     Add display
                                 </button>
                                 <button
-                                    className="ad-nav-btn"
+                                    className="admin-nav-btn"
                                     type="button"
                                     onClick={() => {
                                         updateDisplayConfig(displayDrafts);
@@ -718,7 +718,7 @@ export default function AdminDashboard() {
                                     Save
                                 </button>
                                 <button
-                                    className="ad-nav-btn"
+                                    className="admin-nav-btn"
                                     type="button"
                                     onClick={() => {
                                         setDisplayDrafts(state.displayConfigs);
@@ -731,13 +731,13 @@ export default function AdminDashboard() {
                         </div>
                     ) : (
                         <>
-                        <div className="ad-preview-area">
-                            {previewTab === "preview" && loadingPreview && <div className="ad-preview-overlay">Loading…</div>}
+                        <div className="admin-preview-area">
+                            {previewTab === "preview" && loadingPreview && <div className="admin-preview-overlay">Loading…</div>}
                             {previewTab === "preview" && !selectedSlide && !loadingPreview && (
-                                <div className="ad-preview-overlay">Select a slide to preview</div>
+                                <div className="admin-preview-overlay">Select a slide to preview</div>
                             )}
                             {previewTab === "live" && !selectedDisplayState && (
-                                <div className="ad-preview-overlay">Nothing broadcasting</div>
+                                <div className="admin-preview-overlay">Nothing broadcasting</div>
                             )}
                             <DisplaySlide
                                 json={previewTab === "live" ? liveJson : previewJson}
@@ -747,20 +747,20 @@ export default function AdminDashboard() {
                             />
                         </div>
 
-                        <div className="ad-preview-controls">
-                            <div className="ad-preview-row ad-preview-row-two-col">
-                                <div className="ad-preview-col-left">
+                        <div className="admin-preview-controls">
+                            <div className="admin-preview-row admin-preview-row-two-col">
+                                <div className="admin-preview-col-left">
                                     {selectedBundle && selectedSlide && (
                                         <Link
                                             href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
-                                            className="ad-nav-btn"
+                                            className="admin-nav-btn"
                                         >
                                             <Pencil size={13} /> Edit slide
                                         </Link>
                                     )}
                                 </div>
-                                <div className="ad-preview-col-right">
-                                    <label className="ad-label">Slide duration</label>
+                                <div className="admin-preview-col-right">
+                                    <label className="admin-label">Slide duration</label>
                                     <input
                                         type="number" min={0} max={3600}
                                         value={slideDurationDraft}
@@ -770,15 +770,15 @@ export default function AdminDashboard() {
                                         title="Selected slide duration override (blank = use global)"
                                         disabled={!selectedSlide}
                                     />
-                                    <span className="ad-label">s</span>
+                                    <span className="admin-label">s</span>
                                     <button
-                                        className="ad-nav-btn"
+                                        className="admin-nav-btn"
                                         onClick={handleSaveSlideDuration}
                                         disabled={!isSlideDurationDirty}
                                         title="Save selected slide duration"
                                     >Save</button>
                                     {selectedSlide && isSlideDurationDirty && (
-                                        <span className="ad-label" style={{ color: "#f59e0b" }}>Unsaved</span>
+                                        <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
                                     )}
                                 </div>
                             </div>
@@ -790,13 +790,13 @@ export default function AdminDashboard() {
             </main>
 
             {/* ── Footer ─────────────────────────────── */}
-            <footer className="ad-footer">
-                <div className="ad-footer-controls">
-                    <button className="ad-foot-btn" onClick={() => navigate(-1)} disabled={slides.length < 2} title="Previous slide">
+            <footer className="admin-footer">
+                <div className="admin-footer-controls">
+                    <button className="admin-foot-btn" onClick={() => navigate(-1)} disabled={slides.length < 2} title="Previous slide">
                         <StepBack size={16} />
                     </button>
                     <button
-                        className={`ad-foot-btn ${selectedDisplayIsCycling ? "ad-foot-danger" : "ad-foot-primary"}`}
+                        className={`admin-foot-btn ${selectedDisplayIsCycling ? "admin-foot-danger" : "admin-foot-primary"}`}
                         onClick={selectedDisplayIsCycling ? handleStopCycle : handleShowSlide}
                         disabled={selectedDisplayIsCycling
                             ? !connected
@@ -805,14 +805,14 @@ export default function AdminDashboard() {
                     >
                         {state.isCycling ? <Pause size={16} /> : <Play size={16} />}
                     </button>
-                    <button className="ad-foot-btn" onClick={() => navigate(1)} disabled={slides.length < 2} title="Next slide">
+                    <button className="admin-foot-btn" onClick={() => navigate(1)} disabled={slides.length < 2} title="Next slide">
                         <StepForward size={16} />
                     </button>
-                    <div className="ad-footer-sep" />
-                    <button className="ad-foot-btn ad-foot-danger" onClick={handleClearSlide} disabled={!selectedDisplayState} title="Blackout">
+                    <div className="admin-footer-sep" />
+                    <button className="admin-foot-btn admin-foot-danger" onClick={handleClearSlide} disabled={!selectedDisplayState} title="Blackout">
                         <CircleOff size={16} />
                     </button>
-                    <button className="ad-foot-btn" onClick={() => loadBundles()} title="Reload bundles">
+                    <button className="admin-foot-btn" onClick={() => loadBundles()} title="Reload bundles">
                         <RotateCcw size={15} />
                     </button>
                 </div>
