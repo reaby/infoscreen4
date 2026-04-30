@@ -75,6 +75,7 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
             <DisplaySlide
                 json={displayJson}
                 bundleMeta={bundleMeta}
+                activeEntry={bundleMeta.slides?.find(s => s.id === state.activeSlide?.slide) ?? null}
             />
         </div>
     );

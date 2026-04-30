@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import * as fabric from "fabric";
-import { BundleMeta } from "../interfaces/BundleMeta";
+import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import "./FabricVideo"; // side-effect: registers FabricVideo in classRegistry
 import { loadFabricJsonSafely } from "./fabricLoadHelpers";
 
@@ -12,6 +12,7 @@ interface Props {
     bundleMeta: BundleMeta | null;
     autoScale?: boolean;      // overrides bundleMeta.autoScale (e.g. admin preview always scales)
     showMissingAssetWarning?: boolean;
+    activeEntry?: BundleSlideEntry | null;
 }
 
 const DEFAULT_W = 1920;
@@ -22,7 +23,7 @@ function isVideo(name: string) {
     return VIDEO_EXTS.has(name.split(".").pop()?.toLowerCase() ?? "");
 }
 
-export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOverride, showMissingAssetWarning = false }: Props) {
+export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOverride, showMissingAssetWarning = false, activeEntry }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasWrapRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -109,6 +110,18 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
     }, [designWidth, designHeight, autoScale]);
 
     const [hasMissingAssets, setHasMissingAssets] = useState(false);
+    const [localTime, setLocalTime] = useState("");
+
+    useEffect(() => {
+        if (!bundleMeta?.showLocalTime) return;
+        const updateTime = () => {
+            const now = new Date();
+            setLocalTime(now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false}));
+        };
+        updateTime();
+        const interval = setInterval(updateTime, 1000);
+        return () => clearInterval(interval);
+    }, [bundleMeta?.showLocalTime]);
 
     // Load JSON whenever it changes
     useEffect(() => {
@@ -147,6 +160,36 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
             className="slide-preview-container"
             style={!fileUrl && background ? { background } : undefined}
         >
+            {bundleMeta?.showLocalTime && (() => {
+                const pos = bundleMeta.localTimePosition || "bottom-right";
+                return (
+                    <div
+                        style={{
+                            position: "absolute",
+                            margin: 0,
+                            top: pos.includes("top") ? "min(20px, 2%)" : "auto",
+                            bottom: pos.includes("bottom") ? "min(20px, 2%)" : "auto",
+                            left: pos.includes("left") ? "min(30px, 3%)" : "auto",
+                            right: pos.includes("right") ? "min(30px, 3%)" : "auto",
+                            zIndex: 10,
+                            padding: "4px 12px",
+                            backgroundColor: "rgba(0,0,0,0.5)",
+                            backdropFilter: "blur(4px)",
+                            color: "white",
+                            fontFamily: "Inter",
+                            fontSize: "min(3vw, 48px)",
+                            fontWeight: 900,
+                            letterSpacing: "1px",
+                            borderRadius: "8px",
+                            pointerEvents: "none",
+                            textShadow: "2px 2px 2px black",
+                            boxShadow: "0 4px 6px rgba(0,0,0,0.9)",
+                        }}
+                    >
+                        {localTime}
+                    </div>
+                );
+            })()}
             <div ref={canvasWrapRef} className="ds-canvas-wrap" style={{ position: "relative" }}>
                 {fileUrl && fileIsVideo && (
                     <video
@@ -162,7 +205,15 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                 {fileUrl && !fileIsVideo && (
                     <Image src={fileUrl} className="ds-bg-media" alt="" fill />
                 )}
-                <canvas ref={canvasRef} className="ds-canvas" />
+                {activeEntry?.type === "website" && (
+                    <iframe
+                        src={activeEntry.data}
+                        className="ds-iframe"
+                        style={{ width: "100%", height: "100%", border: "none", position: "absolute", inset: 0, zIndex: 1, backgroundColor: "white" }}
+                        allow="autoplay; fullscreen"
+                    />
+                )}
+                <canvas ref={canvasRef} className="ds-canvas" style={activeEntry?.type === "website" ? { display: "none" } : undefined} />
                 {showMissingAssetWarning && hasMissingAssets && (
                     <div
                         style={{

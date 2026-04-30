@@ -26,7 +26,7 @@ interface ServerState {
 }
 
 interface CycleSlide {
-    slide: string;
+    id: string;
     duration?: number;
 }
 
@@ -146,7 +146,7 @@ function startCycle(displayId: string, initial: ActiveSlide) {
 
     displayCycleBaseDuration[displayId] = initial.duration;
     displayCycleSlides[displayId] = getBundleSlides(initial.bundle);
-    displayCycleIndex[displayId] = displayCycleSlides[displayId].findIndex((s) => s.slide === initial.slide);
+    displayCycleIndex[displayId] = displayCycleSlides[displayId].findIndex((s) => s.id === initial.slide);
     if (displayCycleIndex[displayId] < 0) displayCycleIndex[displayId] = 0;
 
     const initialEntry = displayCycleSlides[displayId][displayCycleIndex[displayId]];
@@ -166,11 +166,11 @@ function startCycle(displayId: string, initial: ActiveSlide) {
         const bundle = currentActive.bundle;
         displayCycleSlides[displayId] = getBundleSlides(bundle);
         if (displayCycleSlides[displayId].length === 0) return;
-        const currentIdx = displayCycleSlides[displayId].findIndex((s) => s.slide === currentActive.slide);
+        const currentIdx = displayCycleSlides[displayId].findIndex((s) => s.id === currentActive.slide);
         displayCycleIndex[displayId] = currentIdx < 0 ? 0 : (currentIdx + 1) % displayCycleSlides[displayId].length;
         const nextEntry = displayCycleSlides[displayId][displayCycleIndex[displayId]];
         const nextDelay = resolveSlideDuration(nextEntry, displayCycleBaseDuration[displayId]);
-        displayStates[displayId] = { bundle, slide: nextEntry.slide, duration: nextDelay };
+        displayStates[displayId] = { bundle, slide: nextEntry.id, duration: nextDelay };
         if (io) {
             io.to(displayRoom(displayId)).emit("slide:show", enrichSlideData(displayStates[displayId]));
         }
@@ -267,7 +267,7 @@ app.prepare().then(() => {
                 if (slides.length > 0) {
                     const duration = displayStates[targetId]?.duration ?? 10;
                     const first = slides[0];
-                    displayStates[targetId] = { bundle, slide: first.slide, duration: resolveSlideDuration(first, duration) };
+                    displayStates[targetId] = { bundle, slide: first.id, duration: resolveSlideDuration(first, duration) };
                     if (io) {
                         io.to(displayRoom(targetId)).emit("slide:show", enrichSlideData(displayStates[targetId]!));
                     }
@@ -318,7 +318,7 @@ app.prepare().then(() => {
                 const slides = getBundleSlides(config.activeBundle);
                 if (slides.length > 0) {
                     const first = slides[0];
-                    const state = { bundle: config.activeBundle, slide: first.slide, duration: resolveSlideDuration(first, 10) };
+                    const state = { bundle: config.activeBundle, slide: first.id, duration: resolveSlideDuration(first, 10) };
                     displayStates[config.id] = state;
                     startCycle(config.id, state);
                 }

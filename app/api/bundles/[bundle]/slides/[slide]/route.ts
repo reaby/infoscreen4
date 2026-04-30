@@ -4,16 +4,20 @@ import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
 import { getBundlesDir } from "@/app/lib/paths";
 
-const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
-
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 
 export async function GET(_req: Request, { params }: Ctx) {
-    const { bundle, slide } = await params;
-    if (!NAME_RE.test(bundle) || !NAME_RE.test(slide)) {
-        return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    const { bundle, slide: id } = await params;
+    const meta = bundleManager.getMeta(bundle);
+    const entry = meta.slides?.find((s) => s.id === id);
+    if (!entry) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    const file = path.join(getBundlesDir(), bundle, "slides", `${slide}.json`);
+    if (entry.type !== "fabric") {
+        return NextResponse.json({ error: "Slide is not fabric format" }, { status: 400 });
+    }
+
+    const file = path.join(getBundlesDir(), bundle, "slides", entry.data);
     try {
         const content = await readFile(file, "utf8");
         return new NextResponse(content, {
@@ -25,33 +29,45 @@ export async function GET(_req: Request, { params }: Ctx) {
 }
 
 export async function POST(req: Request, { params }: Ctx) {
-    const { bundle, slide } = await params;
-    if (!NAME_RE.test(bundle) || !NAME_RE.test(slide)) {
-        return NextResponse.json({ error: "Invalid name" }, { status: 400 });
-    }
+    const { bundle, slide: id } = await params;
     const body = await req.text();
     // Validate it's JSON
     try { JSON.parse(body); } catch {
         return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
     }
+
+    const meta = bundleManager.getMeta(bundle);
+    const entry = meta.slides?.find((s) => s.id === id);
+
     const slidesDir = path.join(getBundlesDir(), bundle, "slides");
     await mkdir(slidesDir, { recursive: true });
-    await writeFile(path.join(slidesDir, `${slide}.json`), body, "utf8");
-    bundleManager.ensureSlideEntry(bundle, slide);
+
+    const filename = entry && entry.type === "fabric" ? entry.data : `${id}.json`;
+    await writeFile(path.join(slidesDir, filename), body, "utf8");
+
+    // Ensure entry exists
+    if (!entry) {
+        bundleManager.ensureSlideEntry(bundle, "fabric", filename);
+    }
+
     return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_req: Request, { params }: Ctx) {
-    const { bundle, slide } = await params;
-    if (!NAME_RE.test(bundle) || !NAME_RE.test(slide)) {
-        return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    const { bundle, slide: id } = await params;
+
+    const meta = bundleManager.getMeta(bundle);
+    const entry = meta.slides?.find((s) => s.id === id);
+
+    if (entry && entry.type === "fabric") {
+        const file = path.join(getBundlesDir(), bundle, "slides", entry.data);
+        try {
+            await unlink(file);
+        } catch {
+            // Ignore missing file
+        }
     }
-    const file = path.join(getBundlesDir(), bundle, "slides", `${slide}.json`);
-    try {
-        await unlink(file);
-        bundleManager.removeSlideEntry(bundle, slide);
-        return NextResponse.json({ ok: true });
-    } catch {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+
+    bundleManager.removeSlideEntry(bundle, id);
+    return NextResponse.json({ ok: true });
 }

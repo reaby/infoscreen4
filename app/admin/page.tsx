@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, User, ChevronDown,
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, User, ChevronDown, Globe
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
@@ -28,6 +28,19 @@ export default function AdminDashboard() {
     const defer = (fn: () => void) => queueMicrotask(fn);
     const router = useRouter();
     const [authChecked, setAuthChecked] = useState(false);
+    const [dialog, setDialog] = useState<{ type: 'prompt' | 'confirm', text: string, defaultVal?: string, resolve: (val: any) => void } | null>(null);
+
+    const askPrompt = (text: string, defaultVal = "") => {
+        return new Promise<string | null>((resolve) => {
+            setDialog({ type: "prompt", text, defaultVal, resolve: (val) => { setDialog(null); resolve(val); } });
+        });
+    };
+
+    const askConfirm = (text: string) => {
+        return new Promise<boolean>((resolve) => {
+            setDialog({ type: "confirm", text, resolve: (val) => { setDialog(null); resolve(val); } });
+        });
+    };
     const [currentUser, setCurrentUser] = useState<string | null>(null);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement | null>(null);
@@ -139,17 +152,14 @@ export default function AdminDashboard() {
         [bundles, selectedDisplayBundle]
     );
     const orderedEntries: BundleSlideEntry[] = useMemo(() => (
-        (bundleMeta.slides ?? []).map((entry) => ({
-            ...entry,
-            file: normalizeSlideFile(entry.file),
-        }))
+        bundleMeta.slides ?? []
     ), [bundleMeta.slides]);
     const entryBySlide = useMemo(() => (
-        new Map(orderedEntries.map((entry) => [entry.file.slice(0, -5), entry]))
+        new Map(orderedEntries.map((entry) => [entry.id, entry]))
     ), [orderedEntries]);
     const selectedEntry = useMemo(() => {
         if (!selectedSlide) return undefined;
-        return orderedEntries.find((entry) => entry.file.slice(0, -5) === selectedSlide);
+        return orderedEntries.find((entry) => entry.id === selectedSlide);
     }, [orderedEntries, selectedSlide]);
     const savedSlideDurationDraft = useMemo(() => (
         typeof selectedEntry?.duration === "number" ? String(selectedEntry.duration) : ""
@@ -334,7 +344,7 @@ export default function AdminDashboard() {
     const selectedDisplayIsCycling = effectiveSelectedDisplay ? state.displayCycling?.[effectiveSelectedDisplay] ?? false : false;
 
     const handleNewBundle = async () => {
-        const name = window.prompt("New bundle name:")?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        const name = (await askPrompt("New bundle name:"))?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!name) return;
         await fetch("/api/bundles", {
             method: "POST",
@@ -346,7 +356,7 @@ export default function AdminDashboard() {
     };
 
     const handleDeleteBundle = async (name: string) => {
-        if (!window.confirm(`Are you sure you want to delete bundle '${name}'? This cannot be undone.`)) return;
+        if (!await askConfirm(`Are you sure you want to delete bundle '${name}'? This cannot be undone.`)) return;
         await fetch(`/api/bundles/${encodeURIComponent(name)}`, { method: "DELETE" });
         if (selectedBundle === name) {
             setSelectedBundle(null);
@@ -356,7 +366,7 @@ export default function AdminDashboard() {
     };
 
     const handleDuplicateBundle = async (name: string) => {
-        const newName = window.prompt("Duplicate bundle as:", `${name}-copy`)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        const newName = (await askPrompt("Duplicate bundle as:", `${name}-copy`))?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!newName) return;
 
         await fetch("/api/bundles", {
@@ -397,7 +407,7 @@ export default function AdminDashboard() {
     };
 
     const handleRenameBundle = async (name: string) => {
-        const newName = window.prompt("Rename bundle to:", name)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        const newName = (await askPrompt("Rename bundle to:", name))?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!newName || newName === name) return;
 
         const res = await fetch(`/api/bundles/${encodeURIComponent(name)}`, {
@@ -417,7 +427,7 @@ export default function AdminDashboard() {
     };
 
     const handleDeleteSlide = async (bundle: string, name: string) => {
-        if (!window.confirm(`Are you sure you want to delete slide '${name}'?`)) return;
+        if (!await askConfirm(`Are you sure you want to delete slide '${name}'?`)) return;
         await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`, {
             method: "DELETE",
         });
@@ -426,7 +436,7 @@ export default function AdminDashboard() {
     };
 
     const handleDuplicateSlide = async (bundle: string, name: string) => {
-        const newName = window.prompt("Duplicate slide as:", `${name}-copy`)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        const newName = (await askPrompt("Duplicate slide as:", `${name}-copy`))?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!newName) return;
         const res = await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`);
         if (!res.ok) return;
@@ -453,8 +463,22 @@ export default function AdminDashboard() {
     };
 
     const handleRenameSlide = async (bundle: string, name: string) => {
-        const newName = window.prompt("Rename slide to:", name)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
-        if (!newName || newName === name) return;
+        const entry = bundleMeta.slides?.find(s => s.id === name);
+        const isWeb = entry?.type === "website";
+
+        let newName;
+        if (isWeb) {
+            const res = await askPrompt("Edit Website URL:", entry?.data);
+            if (res === null) return;
+            newName = res.trim();
+        } else {
+            const res = await askPrompt("Rename slide file to:", name);
+            if (res === null) return;
+            newName = (res || name).replace(/\.json$/, "").trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        }
+
+        if (!newName || newName === (isWeb ? entry?.data : name)) return;
+
 
         const res = await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}/rename`, {
             method: "POST",
@@ -463,12 +487,9 @@ export default function AdminDashboard() {
         });
 
         if (res.ok) {
-            if (selectedSlide === name) {
-                setSelectedSlide(newName);
-            }
             await loadBundles();
         } else {
-            alert("Failed to rename slide");
+            alert("Failed to edit slide data");
         }
     };
 
@@ -492,8 +513,8 @@ export default function AdminDashboard() {
     }, [selectedBundle]);
 
     const buildSlideEntries = useCallback((order: string[]) => {
-        const normalized = new Map(orderedEntries.map((entry) => [entry.file.slice(0, -5), entry]));
-        return order.map((name) => normalized.get(name) ?? { file: `${name}.json`, active: true });
+        const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
+        return order.map((name) => normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true });
     }, [orderedEntries]);
 
     const moveSlide = useCallback((fromSlide: string, toSlide: string) => {
@@ -517,9 +538,9 @@ export default function AdminDashboard() {
             : Number(slideDurationDraft);
         if (nextDuration !== undefined && (!Number.isFinite(nextDuration) || nextDuration < 0)) return;
 
-        const normalized = new Map(orderedEntries.map((entry) => [entry.file.slice(0, -5), entry]));
+        const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
         const nextSlides = slides.map((name) => {
-            const entry = normalized.get(name) ?? { file: `${name}.json`, active: true };
+            const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
             if (name !== selectedSlide) return entry;
             if (nextDuration === undefined) {
                 const rest = { ...entry };
@@ -632,6 +653,44 @@ export default function AdminDashboard() {
 
             {/* ── Main 3-column area ─────────────────── */}
             <main className="admin-main">
+            {dialog && (
+                <div className="slide-picker-overlay" onClick={() => dialog.resolve(null)}>
+                    <div className="slide-picker-modal" onClick={(e) => e.stopPropagation()} style={{ width: 400 }}>
+                        <div className="slide-picker-header">
+                            <span>{dialog.type === 'prompt' ? 'Input' : 'Confirm'}</span>
+                            <button className="toolbar-btn toolbar-btn-icon" onClick={() => dialog.resolve(null)} title="Cancel">?</button>
+                        </div>
+                        <div className="slide-picker-body">
+                            <span className="toolbar-label" style={{ marginBottom: 10, display: "block" }}>{dialog.text}</span>
+                            {dialog.type === 'prompt' && (
+                                <input
+                                    type="text"
+                                    defaultValue={dialog.defaultVal}
+                                    style={{ width: "100%", padding: "6px", marginBottom: "10px", background: "#3a3a3a", color: "white", border: "1px solid #555" }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') dialog.resolve(e.currentTarget.value);
+                                        if (e.key === 'Escape') dialog.resolve(null);
+                                    }}
+                                    autoFocus
+                                    ref={(el) => { if (el) el.select(); }}
+                                />
+                            )}
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                                <button className="toolbar-btn" onClick={() => dialog.resolve(null)}>Cancel</button>
+                                <button className="toolbar-btn" style={{ background: "#0078D4" }} onClick={(e) => {
+                                    if (dialog.type === 'prompt') {
+                                        const input = e.currentTarget.parentElement?.parentElement?.querySelector('input');
+                                        dialog.resolve(input?.value ?? null);
+                                    } else {
+                                        dialog.resolve(true);
+                                    }
+                                }}>OK</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
                 <AdminContextMenu
                     visible={adminContextMenu.visible}
                     x={adminContextMenu.x}
@@ -711,6 +770,29 @@ export default function AdminDashboard() {
                             >
                                 <FilePlus size={14} />
                             </button>
+                            <button
+                                className="admin-icon-btn"
+                                onClick={async () => {
+                                    if (!selectedBundle) return;
+                                    const url = await askPrompt("Website URL (e.g. https://example.com):");
+                                    if (!url) return;
+                                    const titleStr = await askPrompt("Slide title (optional):");
+                                    const title = titleStr ? titleStr.trim() : "";
+                                    const nextSlides = [...(bundleMeta?.slides || []), {
+                                        id: Date.now().toString(),
+                                        type: "website" as const,
+                                        data: url,
+                                        title: title || undefined,
+                                        active: true
+                                    }];
+                                    saveMeta({ slides: nextSlides as BundleSlideEntry[] });
+                                    setSelectedSlide(nextSlides[nextSlides.length - 1].id);
+                                }}
+                                title={selectedBundle ? "Add website slide" : "Select a bundle first"}
+                                disabled={!selectedBundle}
+                            >
+                                <Globe size={14} />
+                            </button>
                     </div>
                     <ul className="admin-list">
                         {!selectedBundle && <li className="admin-list-empty">Select a bundle</li>}
@@ -731,7 +813,15 @@ export default function AdminDashboard() {
                                         x: e.clientX,
                                         y: e.clientY,
                                         items: [
-                                            { label: "Rename Slide", onClick: () => handleRenameSlide(selectedBundle!, slide) },
+                                            { label: existingEntry?.type === "website" ? "Edit URL" : "Rename File", onClick: () => handleRenameSlide(selectedBundle!, slide) },
+{ label: "Edit Title", onClick: async () => {
+    const newTitle = await askPrompt("Slide Title:", existingEntry?.title || slide);
+    if (newTitle !== null) {
+        const normalized = new Map(orderedEntries.map((e) => [e.id, e]));
+const next = slides.map(id => id === slide ? { ...(normalized.get(id) ?? { id, type: "fabric" as const, data: id + ".json" }), title: newTitle } : (normalized.get(id) ?? { id, type: "fabric" as const, data: id + ".json" }));
+        saveMeta({ slides: next });
+    }
+} },
                                             { label: "Duplicate Slide", onClick: () => handleDuplicateSlide(selectedBundle!, slide) },
                                             { label: "Delete Slide", danger: true, onClick: () => handleDeleteSlide(selectedBundle!, slide) }
                                         ]
@@ -764,15 +854,15 @@ export default function AdminDashboard() {
                                     <span className="admin-playing-icon-placeholder">
                                         {isActive(selectedBundle!, slide) ? <Play size={14} className="admin-playing-icon" /> : null}
                                     </span>
-                                    <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{slide}</span>
+                                    <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{existingEntry?.title || slide}</span>
                                     <button
                                         className={`admin-slide-toggle${isEnabled ? " on" : ""}`}
                                         title={isEnabled ? "Remove from cycle" : "Add to cycle"}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            const normalized = new Map(orderedEntries.map((entry) => [entry.file.slice(0, -5), entry]));
+                                            const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
                                             const next = slides.map((name) => {
-                                                const entry = normalized.get(name) ?? { file: `${name}.json`, active: true };
+                                                const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
                                                 if (name !== slide) return entry;
                                                 return { ...entry, active: !isEnabled };
                                             });
@@ -919,6 +1009,11 @@ export default function AdminDashboard() {
                             <DisplaySlide
                                 json={previewTab === "live" ? liveJson : previewJson}
                                 bundleMeta={previewTab === "live" ? liveBundleMeta : bundleMeta}
+                                activeEntry={
+                                    previewTab === "live"
+                                        ? liveBundleMeta?.slides?.find(s => s.id === selectedDisplayState?.slide) ?? null
+                                        : bundleMeta?.slides?.find(s => s.id === selectedSlide) ?? null
+                                }
                                 autoScale={true}
                                 showMissingAssetWarning={true}
                             />
@@ -928,12 +1023,21 @@ export default function AdminDashboard() {
                             <div className="admin-preview-row admin-preview-row-two-col">
                                 <div className="admin-preview-col-left">
                                     {selectedBundle && selectedSlide && (
-                                        <Link
-                                            href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
-                                            className="admin-nav-btn"
-                                        >
-                                            <Pencil size={13} /> Edit slide
-                                        </Link>
+                                        bundleMeta?.slides?.find((s) => s.id === selectedSlide)?.type === "website" ? (
+                                            <button
+                                                className="admin-nav-btn"
+                                                onClick={() => handleRenameSlide(selectedBundle, selectedSlide)}
+                                            >
+                                                <Pencil size={13} /> Edit URL
+                                            </button>
+                                        ) : (
+                                            <Link
+                                                href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
+                                                className="admin-nav-btn"
+                                            >
+                                                <Pencil size={13} /> Edit slide
+                                            </Link>
+                                        )
                                     )}
                                 </div>
                                 <div className="admin-preview-col-right">

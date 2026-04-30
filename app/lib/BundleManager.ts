@@ -6,7 +6,7 @@ import { getBundlesDir } from "./paths";
 type RawMeta = Record<string, unknown>;
 
 export interface OrderedSlide {
-    slide: string;
+    id: string;
     duration?: number;
 }
 
@@ -20,12 +20,11 @@ export class BundleManager {
             ...raw,
             slides,
         } as BundleMeta;
-        delete meta.activeSlides;
         return meta;
     }
 
-    getSlideJson(bundle: string, slide: string): object | null {
-        const filePath = path.join(this.slidesDir(bundle), this.fileFromSlide(slide));
+    getSlideJson(bundle: string, data: string): object | null {
+        const filePath = path.join(this.slidesDir(bundle), this.normalizeJsonFile(data));
         try {
             return JSON.parse(readFileSync(filePath, "utf8")) as object;
         } catch {
@@ -41,7 +40,6 @@ export class BundleManager {
             ...(merged as BundleMeta),
             slides,
         };
-        delete finalMeta.activeSlides;
         this.writeMeta(bundle, finalMeta);
         return finalMeta;
     }
@@ -53,7 +51,6 @@ export class BundleManager {
             ...(replaced as BundleMeta),
             slides,
         };
-        delete finalMeta.activeSlides;
         this.writeMeta(bundle, finalMeta);
         return finalMeta;
     }
@@ -63,7 +60,7 @@ export class BundleManager {
         const activeOnly = options?.activeOnly ?? false;
         return slides
             .filter((entry) => !activeOnly || entry.active !== false)
-            .map((entry) => this.slideFromFile(entry.file));
+            .map((entry) => entry.id);
     }
 
     getOrderedSlides(bundle: string, options?: { activeOnly?: boolean }): OrderedSlide[] {
@@ -72,36 +69,58 @@ export class BundleManager {
         return slides
             .filter((entry) => !activeOnly || entry.active !== false)
             .map((entry) => ({
-                slide: this.slideFromFile(entry.file),
+                id: entry.id,
                 duration: entry.duration,
             }));
     }
 
-    ensureSlideEntry(bundle: string, slide: string): void {
+    ensureSlideEntry(bundle: string, type: "fabric" | "website", data: string, title?: string): string {
         const meta = this.getMeta(bundle);
-        const file = this.fileFromSlide(slide);
         const slides = [...(meta.slides ?? [])];
-        const hasEntry = slides.some((entry) => this.normalizeJsonFile(entry.file) === file);
-        if (!hasEntry) {
-            slides.push({ file, active: true });
-            this.writeMeta(bundle, { ...meta, slides });
+        
+        let existingId: string | undefined;
+        if (type === "fabric") {
+            const fileData = this.normalizeJsonFile(data);
+            const existing = slides.find(s => s.type === "fabric" && this.normalizeJsonFile(s.data) === fileData);
+            if (existing) existingId = existing.id;
+        } else {
+            const existing = slides.find(s => s.type === "website" && s.data === data);
+            if (existing) existingId = existing.id;
         }
+
+        if (existingId) return existingId;
+
+        const id = Date.now().toString();
+        const newEntry: BundleSlideEntry = {
+            id,
+            type,
+            data: type === "fabric" ? this.normalizeJsonFile(data) : data,
+            active: true
+        };
+        if (title) {
+            newEntry.title = title;
+        }
+        
+        slides.push(newEntry);
+        this.writeMeta(bundle, { ...meta, slides });
+        return id;
     }
 
-    removeSlideEntry(bundle: string, slide: string): void {
+    removeSlideEntry(bundle: string, id: string): void {
         const meta = this.getMeta(bundle);
-        const file = this.fileFromSlide(slide);
-        const slides = (meta.slides ?? []).filter((entry) => this.normalizeJsonFile(entry.file) !== file);
+        const slides = (meta.slides ?? []).filter((entry) => entry.id !== id);
         this.writeMeta(bundle, { ...meta, slides });
     }
 
-    renameSlideEntry(bundle: string, oldSlide: string, newSlide: string): void {
+    renameSlideEntry(bundle: string, id: string, newData?: string, newId?: string): void {
         const meta = this.getMeta(bundle);
-        const oldFile = this.fileFromSlide(oldSlide);
-        const newFile = this.fileFromSlide(newSlide);
         const slides = (meta.slides ?? []).map((entry) => {
-            if (this.normalizeJsonFile(entry.file) === oldFile) {
-                return { ...entry, file: newFile };
+            if (entry.id === id) {
+                return { 
+                    ...entry, 
+                    ...(newData ? { data: entry.type === "fabric" ? this.normalizeJsonFile(newData) : newData } : {}),
+                    ...(newId ? { id: newId } : {})
+                };
             }
             return entry;
         });
@@ -118,6 +137,10 @@ export class BundleManager {
 
     private metaPath(bundle: string): string {
         return path.join(this.bundleDir(bundle), "bundle.json");
+    }
+
+    public normalizeJsonFile(filename: string): string {
+        return filename.endsWith(".json") ? filename : `${filename}.json`;
     }
 
     private listSlideFiles(bundle: string): string[] {
@@ -138,54 +161,58 @@ export class BundleManager {
 
     private writeMeta(bundle: string, meta: BundleMeta): void {
         mkdirSync(this.bundleDir(bundle), { recursive: true });
-        const cleanMeta = { ...meta } as BundleMeta & { activeSlides?: unknown };
-        delete cleanMeta.activeSlides;
-        writeFileSync(this.metaPath(bundle), JSON.stringify(cleanMeta, null, 2), "utf8");
+        writeFileSync(this.metaPath(bundle), JSON.stringify(meta, null, 2), "utf8");
     }
 
     private buildSlidesFromMeta(bundle: string, rawMeta: RawMeta): BundleSlideEntry[] {
         const allFiles = this.listSlideFiles(bundle);
-        const allSet = new Set(allFiles);
-        const slidesFromMeta = this.parseSlidesArray(rawMeta.slides, allSet);
-        if (slidesFromMeta.length > 0) {
-            const known = new Set(slidesFromMeta.map((entry) => entry.file));
-            const rest = allFiles
-                .filter((file) => !known.has(file))
-                .map((file) => ({ file, active: true }));
-            return [...slidesFromMeta, ...rest];
-        }
+        const slidesFromMeta = this.parseSlidesArray(rawMeta.slides);
+        
+        const knownFabricData = new Set(
+            slidesFromMeta
+                .filter((entry) => entry.type === "fabric")
+                .map((entry) => this.normalizeJsonFile(entry.data))
+        );
 
-        const activeSlides = this.parseActiveSlides(rawMeta.activeSlides, allSet);
-        if (activeSlides.length > 0) {
-            const activeSet = new Set(activeSlides);
-            const inactive = allFiles
-                .filter((file) => !activeSet.has(file))
-                .map((file) => ({ file, active: false }));
-            return [
-                ...activeSlides.map((file) => ({ file, active: true })),
-                ...inactive,
-            ];
-        }
+        const rest = allFiles
+            .filter((file) => !knownFabricData.has(file))
+            .map((file) => ({
+                id: file.slice(0, -5),
+                type: "fabric" as const,
+                data: file,
+                active: true,
+            }));
 
-        return allFiles.map((file) => ({ file, active: true }));
+        return [...slidesFromMeta, ...rest];
     }
 
-    private parseSlidesArray(value: unknown, allSet: Set<string>): BundleSlideEntry[] {
+    private parseSlidesArray(value: unknown): BundleSlideEntry[] {
         if (!Array.isArray(value)) return [];
         const result: BundleSlideEntry[] = [];
         const seen = new Set<string>();
 
         for (const candidate of value) {
             if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
-            const fileRaw = (candidate as { file?: unknown }).file;
-            if (typeof fileRaw !== "string") continue;
-            const file = this.normalizeJsonFile(fileRaw);
-            if (!allSet.has(file) || seen.has(file)) continue;
+            
+            const id = (candidate as any).id;
+            const type = (candidate as any).type;
+            const data = (candidate as any).data;
+            const title = (candidate as any).title;
 
-            const activeRaw = (candidate as { active?: unknown }).active;
-            const durationRaw = (candidate as { duration?: unknown }).duration;
+            if (typeof id !== "string" || !id) continue;
+            if (type !== "fabric" && type !== "website") continue;
+            if (typeof data !== "string" || !data) continue;
+            
+            if (seen.has(id)) continue;
+
+            const activeRaw = (candidate as any).active;
+            const durationRaw = (candidate as any).duration;
+            
             const entry: BundleSlideEntry = {
-                file,
+                id,
+                type,
+                data: type === "fabric" ? this.normalizeJsonFile(data) : data,
+                title: typeof title === "string" ? title : undefined,
                 active: typeof activeRaw === "boolean" ? activeRaw : true,
             };
             if (typeof durationRaw === "number" && Number.isFinite(durationRaw) && durationRaw >= 0) {
@@ -193,38 +220,10 @@ export class BundleManager {
             }
 
             result.push(entry);
-            seen.add(file);
+            seen.add(id);
         }
 
         return result;
-    }
-
-    private parseActiveSlides(value: unknown, allSet: Set<string>): string[] {
-        if (!Array.isArray(value)) return [];
-        const result: string[] = [];
-        const seen = new Set<string>();
-
-        for (const slide of value) {
-            if (typeof slide !== "string") continue;
-            const file = this.normalizeJsonFile(slide);
-            if (!allSet.has(file) || seen.has(file)) continue;
-            seen.add(file);
-            result.push(file);
-        }
-
-        return result;
-    }
-
-    private normalizeJsonFile(name: string): string {
-        return name.endsWith(".json") ? name : `${name}.json`;
-    }
-
-    private fileFromSlide(slide: string): string {
-        return this.normalizeJsonFile(slide);
-    }
-
-    private slideFromFile(file: string): string {
-        return file.endsWith(".json") ? file.slice(0, -5) : file;
     }
 }
 

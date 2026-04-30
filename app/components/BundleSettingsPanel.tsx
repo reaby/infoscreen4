@@ -87,10 +87,36 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                             <span className="admin-label">s (≤0 = manual)</span>
                         </div>
                     </div>
-                </div>
 
-                {/* ── Background colour / CSS ────────── */}
-                <div className="admin-settings-group">
+                        <div className="admin-settings-group" style={{ marginTop: 8 }}>
+                            <label className="admin-settings-label">Local Time Display</label>
+                            <div className="admin-settings-row">
+                                <label className="admin-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={metaDraft.showLocalTime ?? false}
+                                        onChange={(e) => setMetaDraft((d) => ({ ...d, showLocalTime: e.target.checked }))}
+                                    />
+                                    Show local time
+                                </label>
+                            </div>
+                            {metaDraft.showLocalTime && (
+                                <div className="admin-settings-row" style={{ marginTop: 4 }}>
+                                    <label className="admin-label">Position</label>
+                                    <select
+                                        className="admin-settings-input"
+                                        value={metaDraft.localTimePosition ?? "bottom-right"}
+                                        onChange={(e) => setMetaDraft((d) => ({ ...d, localTimePosition: e.target.value as any }))}
+                                        style={{ width: "120px" }}
+                                    >
+                                        <option value="top-left">Top Left</option>
+                                        <option value="top-right">Top Right</option>
+                                        <option value="bottom-left">Bottom Left</option>
+                                        <option value="bottom-right">Bottom Right</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
                     <label className="admin-settings-label">Background colour / CSS</label>
                     <div className="admin-settings-row">
                         <input

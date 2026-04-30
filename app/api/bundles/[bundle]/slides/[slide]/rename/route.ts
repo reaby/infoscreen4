@@ -4,31 +4,37 @@ import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
 import { getBundlesDir } from "@/app/lib/paths";
 
-const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
-
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 
 export async function POST(req: Request, { params }: Ctx) {
-    const { bundle, slide } = await params;
-    if (!NAME_RE.test(bundle) || !NAME_RE.test(slide)) {
-        return NextResponse.json({ error: "Invalid name" }, { status: 400 });
-    }
-    const body = await req.json().catch(() => null);
-    if (!body || !body.newName || !NAME_RE.test(body.newName)) {
-        return NextResponse.json({ error: "Invalid newName" }, { status: 400 });
+    const { bundle, slide: id } = await params;
+    const body = await req.json().catch(() => ({}));
+    const newName = body.newName as string;
+
+    if (!newName) {
+        return NextResponse.json({ error: "Missing newName" }, { status: 400 });
     }
 
-    const newName = body.newName;
-    const slidesDir = path.join(getBundlesDir(), bundle, "slides");
+    const meta = bundleManager.getMeta(bundle);
+    const entry = meta.slides?.find((s) => s.id === id);
 
-    try {
-        await rename(
-            path.join(slidesDir, `${slide}.json`),
-            path.join(slidesDir, `${newName}.json`)
-        );
-        bundleManager.renameSlideEntry(bundle, slide, newName);
-        return NextResponse.json({ success: true, newName });
-    } catch (e: any) {
-        return NextResponse.json({ error: e.message || "Rename failed" }, { status: 500 });
+    if (!entry) {
+        return NextResponse.json({ error: "Slide not found" }, { status: 404 });
     }
+
+    if (entry.type === "fabric") {
+        const oldFile = path.join(getBundlesDir(), bundle, "slides", entry.data);
+        const newFile = path.join(getBundlesDir(), bundle, "slides", bundleManager.normalizeJsonFile(newName));
+
+        try {
+            await rename(oldFile, newFile);
+            bundleManager.renameSlideEntry(bundle, id, bundleManager.normalizeJsonFile(newName));
+        } catch {
+            return NextResponse.json({ error: "Rename failed" }, { status: 500 });
+        }
+    } else {
+        bundleManager.renameSlideEntry(bundle, id, newName);
+    }
+
+    return NextResponse.json({ ok: true });
 }

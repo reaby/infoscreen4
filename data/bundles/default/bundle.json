@@ -1,34 +1,56 @@
 {
-  "width": 1920,
-  "height": 1080,
-  "autoScale": true,
   "slides": [
     {
-      "file": "infoscreen4.json",
+      "id": "infoscreen4",
+      "type": "fabric",
+      "data": "infoscreen4.json",
+      "title": "InfoScreen 4",
       "active": true
     },
     {
-      "file": "techstack.json",
+      "id": "techstack",
+      "type": "fabric",
+      "data": "techstack.json",
+      "title": "Tech Stack",
       "active": true
     },
     {
-      "file": "features.json",
+      "id": "features",
+      "type": "fabric",
+      "data": "features.json",
+      "title": "Features",
       "active": true
     },
     {
-      "file": "slides.json",
+      "id": "slides",
+      "type": "fabric",
+      "data": "slides.json",
+      "title": "Slides",
       "active": false
     },
     {
-      "file": "admin.json",
+      "id": "admin",
+      "type": "fabric",
+      "data": "admin.json",
+      "title": "Admin",
       "active": true
     },
     {
-      "file": "settings.json",
+      "id": "settings",
+      "type": "fabric",
+      "data": "settings.json",
+      "title": "Settings",
       "active": true
+    },
+    {
+      "id": "1234567890",
+      "type": "website",
+      "data": "https://example.com",
+      "title": "Test Website Slide",
+      "active": false
     }
   ],
-  "backgroundColor": "#135d96",
+  "showLocalTime": true,
   "backgroundFile": "waves_bottom.mp4",
-  "defaultDuration": 20
+  "localTimePosition": "bottom-right"
 }
