@@ -17,6 +17,14 @@
     },
     {
       "file": "slides.json",
+      "active": false
+    },
+    {
+      "file": "admin.json",
+      "active": true
+    },
+    {
+      "file": "settings.json",
       "active": true
     }
   ],
