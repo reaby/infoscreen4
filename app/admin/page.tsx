@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
 import UserManager from "../components/UserManager";
+import AdminContextMenu from "../components/AdminContextMenu";
 const DisplaySlide = dynamic(() => import("../components/DisplaySlide"), { ssr: false });
 
 interface BundleInfo {
@@ -34,6 +35,14 @@ export default function AdminDashboard() {
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState<string | null>(null);
     const [displayDrafts, setDisplayDrafts] = useState<DisplayConfig[]>([]);
+
+    const [adminContextMenu, setAdminContextMenu] = useState<{
+        visible: boolean;
+        x: number;
+        y: number;
+        items: { label: string; onClick: () => void; danger?: boolean }[];
+    }>({ visible: false, x: 0, y: 0, items: [] });
+
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -91,6 +100,7 @@ export default function AdminDashboard() {
     const [dragSlide, setDragSlide] = useState<string | null>(null);
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
+    const [confirmActivateBundle, setConfirmActivateBundle] = useState<string | null>(null);
     const bundleMetaRef = useRef<BundleMeta>({});
     const liveLoadSeqRef = useRef(0);
 
@@ -324,7 +334,7 @@ export default function AdminDashboard() {
     const selectedDisplayIsCycling = effectiveSelectedDisplay ? state.displayCycling?.[effectiveSelectedDisplay] ?? false : false;
 
     const handleNewBundle = async () => {
-        const name = window.prompt("New bundle name:")?.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+        const name = window.prompt("New bundle name:")?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!name) return;
         await fetch("/api/bundles", {
             method: "POST",
@@ -333,6 +343,133 @@ export default function AdminDashboard() {
         });
         await loadBundles();
         setSelectedBundle(name);
+    };
+
+    const handleDeleteBundle = async (name: string) => {
+        if (!window.confirm(`Are you sure you want to delete bundle '${name}'? This cannot be undone.`)) return;
+        await fetch(`/api/bundles/${encodeURIComponent(name)}`, { method: "DELETE" });
+        if (selectedBundle === name) {
+            setSelectedBundle(null);
+            setSelectedSlide(null);
+        }
+        await loadBundles();
+    };
+
+    const handleDuplicateBundle = async (name: string) => {
+        const newName = window.prompt("Duplicate bundle as:", `${name}-copy`)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        if (!newName) return;
+
+        await fetch("/api/bundles", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: newName }),
+        });
+
+        // copy slides over via the duplicates api locally (read bundle then recreate for each)
+        // Actually, it's easier to duplicate slides one by one
+        const slideMeta = await fetch(`/api/bundles/${encodeURIComponent(name)}/slides`).then(r => r.json());
+        if (Array.isArray(slideMeta)) {
+            for (const slide of slideMeta) {
+                const res = await fetch(`/api/bundles/${encodeURIComponent(name)}/slides/${encodeURIComponent(slide)}`);
+                if (res.ok) {
+                    const body = await res.text();
+                    await fetch(`/api/bundles/${encodeURIComponent(newName)}/slides/${encodeURIComponent(slide)}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body,
+                    });
+                }
+            }
+        }
+        // copy bundle.json metadata as well
+        const metaRes = await fetch(`/api/bundles/${encodeURIComponent(name)}`);
+        if (metaRes.ok) {
+            const metaBody = await metaRes.json();
+            await fetch(`/api/bundles/${encodeURIComponent(newName)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(metaBody),
+            });
+        }
+
+        await loadBundles();
+        setSelectedBundle(newName);
+    };
+
+    const handleRenameBundle = async (name: string) => {
+        const newName = window.prompt("Rename bundle to:", name)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        if (!newName || newName === name) return;
+
+        const res = await fetch(`/api/bundles/${encodeURIComponent(name)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "rename", newName }),
+        });
+
+        if (res.ok) {
+            if (selectedBundle === name) {
+                setSelectedBundle(newName);
+            }
+            await loadBundles();
+        } else {
+            alert("Failed to rename bundle");
+        }
+    };
+
+    const handleDeleteSlide = async (bundle: string, name: string) => {
+        if (!window.confirm(`Are you sure you want to delete slide '${name}'?`)) return;
+        await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`, {
+            method: "DELETE",
+        });
+        if (selectedSlide === name) setSelectedSlide(null);
+        await loadBundles();
+    };
+
+    const handleDuplicateSlide = async (bundle: string, name: string) => {
+        const newName = window.prompt("Duplicate slide as:", `${name}-copy`)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        if (!newName) return;
+        const res = await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`);
+        if (!res.ok) return;
+        const body = await res.text();
+        await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(newName)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+        });
+
+        // Add to bundle meta as well
+        const meta = await fetch(`/api/bundles/${encodeURIComponent(bundle)}`).then(r => r.json());
+        if (meta && Array.isArray(meta.slides)) {
+             meta.slides.push(newName);
+             await fetch(`/api/bundles/${encodeURIComponent(bundle)}`, {
+                 method: "PATCH",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify({ slides: meta.slides })
+             });
+        }
+
+        await loadBundles();
+        setSelectedSlide(newName);
+    };
+
+    const handleRenameSlide = async (bundle: string, name: string) => {
+        const newName = window.prompt("Rename slide to:", name)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
+        if (!newName || newName === name) return;
+
+        const res = await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}/rename`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ newName }),
+        });
+
+        if (res.ok) {
+            if (selectedSlide === name) {
+                setSelectedSlide(newName);
+            }
+            await loadBundles();
+        } else {
+            alert("Failed to rename slide");
+        }
     };
 
     const navigate = (dir: 1 | -1) => {
@@ -495,6 +632,13 @@ export default function AdminDashboard() {
 
             {/* ── Main 3-column area ─────────────────── */}
             <main className="admin-main">
+                <AdminContextMenu
+                    visible={adminContextMenu.visible}
+                    x={adminContextMenu.x}
+                    y={adminContextMenu.y}
+                    items={adminContextMenu.items}
+                    onClose={() => setAdminContextMenu((prev) => ({ ...prev, visible: false }))}
+                />
 
                 {/* Column 1 – Bundles */}
                 <aside className="admin-col admin-col-bundles">
@@ -507,7 +651,22 @@ export default function AdminDashboard() {
                     <ul className="admin-list">
                         {bundles.length === 0 && <li className="admin-list-empty">No bundles</li>}
                         {bundles.map((b) => (
-                            <li key={b.name}>
+                            <li
+                                key={b.name}
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setAdminContextMenu({
+                                        visible: true,
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        items: [
+                                            { label: "Rename Bundle", onClick: () => handleRenameBundle(b.name) },
+                                            { label: "Duplicate Bundle", onClick: () => handleDuplicateBundle(b.name) },
+                                            { label: "Delete Bundle", danger: true, onClick: () => handleDeleteBundle(b.name) },
+                                        ]
+                                    });
+                                }}
+                            >
                                 <div className={`admin-list-item ${selectedBundle === b.name ? "selected" : ""}`}>
                                     <button
                                         className="admin-list-item-name-btn"
@@ -518,7 +677,12 @@ export default function AdminDashboard() {
                                     <span className="admin-list-item-count">{b.slides.length}</span>
                                     <button
                                         className={`admin-bundle-active-btn${selectedDisplayState?.bundle === b.name ? " on" : ""}`}
-                                        onClick={() => selectedDisplay && activateBundle(b.name, selectedDisplay)}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (!effectiveSelectedDisplay) return;
+                                            setConfirmActivateBundle(b.name);
+                                        }}
                                         title={selectedDisplayState?.bundle === b.name ? "Active bundle" : "Set as active bundle"}
                                     >
                                         <Zap size={11} />
@@ -560,6 +724,19 @@ export default function AdminDashboard() {
                             <li
                                 key={slide}
                                 draggable={true}
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setAdminContextMenu({
+                                        visible: true,
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        items: [
+                                            { label: "Rename Slide", onClick: () => handleRenameSlide(selectedBundle!, slide) },
+                                            { label: "Duplicate Slide", onClick: () => handleDuplicateSlide(selectedBundle!, slide) },
+                                            { label: "Delete Slide", danger: true, onClick: () => handleDeleteSlide(selectedBundle!, slide) }
+                                        ]
+                                    });
+                                }}
                                 onDragStart={(e) => {
                                     setDragSlide(slide);
                                     setDragOverSlide(slide);
@@ -817,6 +994,41 @@ export default function AdminDashboard() {
                     </button>
                 </div>
             </footer>
+
+            {confirmActivateBundle !== null && (
+                <div className="slide-picker-overlay" onClick={() => setConfirmActivateBundle(null)} style={{ zIndex: 10000 }}>
+                    <div className="slide-picker-modal" onClick={(e) => e.stopPropagation()} style={{ width: '400px' }}>
+                        <div className="slide-picker-header">
+                            <span>Confirm Active Bundle</span>
+                            <button className="toolbar-btn toolbar-btn-icon" onClick={() => setConfirmActivateBundle(null)} title="Close">✕</button>
+                        </div>
+                        <div className="slide-picker-body" style={{ padding: '20px 10px', textAlign: 'center' }}>
+                            <p style={{ marginBottom: '20px', fontSize: '15px' }}>
+                                Are you sure you want to set &quot;<strong>{confirmActivateBundle}</strong>&quot; as the active bundle?
+                            </p>
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                <button
+                                    className="toolbar-btn"
+                                    onClick={() => setConfirmActivateBundle(null)}
+                                    style={{ padding: '8px 16px' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className="toolbar-btn toolbar-btn-primary"
+                                    style={{ padding: '8px 16px', background: '#36f', color: '#fff', border: '1px solid #25e' }}
+                                    onClick={() => {
+                                        if (effectiveSelectedDisplay) activateBundle(confirmActivateBundle, effectiveSelectedDisplay);
+                                        setConfirmActivateBundle(null);
+                                    }}
+                                >
+                                    Set Active Bundle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
         </>

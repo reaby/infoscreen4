@@ -3,7 +3,7 @@ import { readFile, unlink, rename, stat, open } from "fs/promises";
 import path from "path";
 import { getVideosDir } from "@/app/lib/paths";
 
-const NAME_RE = /^[a-zA-Z0-9._-]+$/;
+const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 
 const MIME: Record<string, string> = {
     mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg",

@@ -1,43 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Infoscreen4
+
+Digital signage system built for LAN parties, events, and dynamic displays. Infoscreen4 allows you to manage multiple networked displays from a centralized admin panel in real-time.
+
+## Features
+
+- **Real-Time Display Sync**: Push live updates to all connected screens instantly via WebSockets.
+- **Advanced Slide Editor**: Web-based WYSIWYG editor using Fabric.js.
+  - Support for text with customizable Google Fonts.
+  - Image and Video elements.
+  - Shapes, customizable colors, outlines, and dropshadows.
+- **Bundle Management**: Create "Bundles" consisting of multiple slides, and assign different bundles to different physical displays.
+- **Media Manager**: Built-in file management for uploading background images, videos, and generic assets.
+- **Internal JSON Database**: Simple filesystem-based JSON storage under `/data`. No complex external database setup required.
 
 ## Getting Started
 
-First, run the development server:
+Make sure you have [Node.js](https://nodejs.org/) installed. This project uses `pnpm`, but you can use `npm` or `yarn` as well.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Start the development server (runs with `tsx` to support the custom WebSocket server):
+   ```bash
+   pnpm run dev
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Open [http://localhost:3000](http://localhost:3000) with your browser.
+   - Access the main dashboard at `/`
+   - Access the admin panel at `/admin`
+   - Access a specific display endpoint at `/display/[id]`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deployment (Production)
 
-## Learn More
+Running in production requires building the Next.js frontend, then running the custom `server.ts` entrypoint.
 
-To learn more about Next.js, take a look at the following resources:
+1. Build the optimal production bundle:
+   ```bash
+   pnpm run build
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. Run the production server:
+   ```bash
+   pnpm run start
+   ```
 
 ## Environment Variables (VPS)
 
-This project reads runtime settings from environment variables (or `.env` when using the npm scripts).
+This project reads runtime settings from environment variables (or `.env` when using the script commands).
 
 Copy the example file:
 

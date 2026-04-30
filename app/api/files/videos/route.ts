@@ -33,7 +33,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "File too large (max 200 MB)" }, { status: 413 });
     }
 
-    const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._\- ]/g, "_");
     if (!safeName) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
 
     await mkdir(videosDir, { recursive: true });

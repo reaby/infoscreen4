@@ -7,7 +7,7 @@ import * as fabric from "fabric";
 import Toolbar from "./Toolbar";
 import ContextMenu from "./ContextMenu";
 import ShortcutHelpPopup from "./ShortcutHelpPopup";
-import { loadFabricJsonSafely } from "./fabricLoadHelpers";
+import { loadFabricJsonSafely, sanitizeCanvasJson } from "./fabricLoadHelpers";
 import { FabricVideo } from "./FabricVideo";
 
 const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
@@ -268,6 +268,20 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             selection: true,
         });
 
+        document.fonts.ready.then(() => {
+            if (fabric.cache && fabric.cache.charWidthsCache) {
+                fabric.cache.charWidthsCache.clear();
+            }
+            canvas.getObjects().forEach((obj) => {
+                if (obj instanceof fabric.IText || obj instanceof fabric.Textbox || obj instanceof fabric.Text) {
+                    (obj as any)._clearCache?.();
+                    obj.initDimensions?.();
+                    obj.setCoords();
+                }
+            });
+            canvas.requestRenderAll();
+        });
+
         fabric.InteractiveFabricObject.ownDefaults = {
             ...fabric.InteractiveFabricObject.ownDefaults,
             cornerStrokeColor: '#123',
@@ -283,7 +297,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
 
         const saveSnapshot = () => {
             if (isRestoringRef.current) return;
-            const json = JSON.stringify(canvas.toJSON());
+            const json = JSON.stringify(sanitizeCanvasJson(canvas.toJSON()));
             historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
             historyRef.current.push(json);
             historyIndexRef.current = historyRef.current.length - 1;
@@ -668,7 +682,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         canvas.clear();
         isRestoringRef.current = false;
         // Save the empty canvas as a new undo snapshot
-        const json = JSON.stringify(canvas.toJSON());
+        const json = JSON.stringify(sanitizeCanvasJson(canvas.toJSON()));
         historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
         historyRef.current.push(json);
         historyIndexRef.current = historyRef.current.length - 1;

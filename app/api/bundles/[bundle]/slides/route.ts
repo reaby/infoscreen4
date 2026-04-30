@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { bundleManager } from "@/app/lib/BundleManager";
 
-const NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
 
 export async function GET(
     _req: Request,

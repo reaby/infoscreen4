@@ -4,6 +4,7 @@ import path from "path";
 export interface DisplayConfig {
     id: string;
     name: string;
+    activeBundle?: string;
 }
 
 const file = path.join(process.cwd(), "data", "display.json");

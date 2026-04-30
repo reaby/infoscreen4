@@ -1,6 +1,7 @@
 [
   {
     "id": "display-1",
-    "name": "Display 1"
+    "name": "Display 1",
+    "activeBundle": "default"
   }
 ]

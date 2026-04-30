@@ -95,6 +95,19 @@ export class BundleManager {
         this.writeMeta(bundle, { ...meta, slides });
     }
 
+    renameSlideEntry(bundle: string, oldSlide: string, newSlide: string): void {
+        const meta = this.getMeta(bundle);
+        const oldFile = this.fileFromSlide(oldSlide);
+        const newFile = this.fileFromSlide(newSlide);
+        const slides = (meta.slides ?? []).map((entry) => {
+            if (this.normalizeJsonFile(entry.file) === oldFile) {
+                return { ...entry, file: newFile };
+            }
+            return entry;
+        });
+        this.writeMeta(bundle, { ...meta, slides });
+    }
+
     private bundleDir(bundle: string): string {
         return path.join(getBundlesDir(), bundle);
     }

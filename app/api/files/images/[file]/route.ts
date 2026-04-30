@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readFile, unlink, rename, stat } from "fs/promises";
 import path from "path";
 
-const NAME_RE = /^[a-zA-Z0-9._-]+$/;
+const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 const IMAGES_DIR = process.env.INFOSCREEN_DATA_DIR
     ? path.join(path.resolve(process.env.INFOSCREEN_DATA_DIR), "images")
     : path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "images");

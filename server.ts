@@ -266,16 +266,20 @@ app.prepare().then(() => {
                 const slides = getBundleSlides(bundle);
                 if (slides.length > 0) {
                     const duration = displayStates[targetId]?.duration ?? 10;
-                    const currentActive = displayStates[targetId];
-                    const keepCurrent = currentActive?.bundle === bundle && slides.some((s) => s.slide === currentActive.slide);
-                    if (!keepCurrent) {
-                        const first = slides[0];
-                        displayStates[targetId] = { bundle, slide: first.slide, duration: resolveSlideDuration(first, duration) };
-                        if (io) {
-                            io.to(displayRoom(targetId)).emit("slide:show", enrichSlideData(displayStates[targetId]!));
-                        }
+                    const first = slides[0];
+                    displayStates[targetId] = { bundle, slide: first.slide, duration: resolveSlideDuration(first, duration) };
+                    if (io) {
+                        io.to(displayRoom(targetId)).emit("slide:show", enrichSlideData(displayStates[targetId]!));
                     }
+                    startCycle(targetId, displayStates[targetId]!);
                 }
+
+                const confIndex = displayConfigs.findIndex(c => c.id === targetId);
+                if (confIndex !== -1) {
+                    displayConfigs[confIndex] = { ...displayConfigs[confIndex], activeBundle: bundle };
+                    setDisplayConfigs(displayConfigs);
+                }
+
                 emitAdminState();
             });
 
@@ -286,7 +290,14 @@ app.prepare().then(() => {
                     const id = config.id.trim() || `display-${uniqueConfigs.length + 1}`;
                     if (!seenIds.has(id)) {
                         seenIds.add(id);
-                        uniqueConfigs.push({ id, name: config.name || `Display ${id}` });
+
+                        // Preserve existing activeBundle if available
+                        const existing = displayConfigs.find(c => c.id === id);
+                        uniqueConfigs.push({
+                            id,
+                            name: config.name || `Display ${id}`,
+                            activeBundle: existing?.activeBundle
+                        });
                     }
                 }
                 displayConfigs = uniqueConfigs.length > 0 ? uniqueConfigs : [{ id: "1", name: "Display 1" }];
@@ -300,5 +311,18 @@ app.prepare().then(() => {
 
     httpServer.listen(port, hostname, () => {
         console.log(`> Ready on http://${hostname}:${port} [${dev ? "dev" : "production"}]`);
+
+        // Boot active bundles for all displays
+        for (const config of displayConfigs) {
+            if (config.activeBundle) {
+                const slides = getBundleSlides(config.activeBundle);
+                if (slides.length > 0) {
+                    const first = slides[0];
+                    const state = { bundle: config.activeBundle, slide: first.slide, duration: resolveSlideDuration(first, 10) };
+                    displayStates[config.id] = state;
+                    startCycle(config.id, state);
+                }
+            }
+        }
     });
 });

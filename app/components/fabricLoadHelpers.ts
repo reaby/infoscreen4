@@ -52,6 +52,29 @@ async function cleanFabricValue(value: unknown, cache: Map<string, boolean>, sta
     return value;
 }
 
+export function sanitizeCanvasJson(value: any): any {
+    if (Array.isArray(value)) {
+        return value.map((item) => sanitizeCanvasJson(item));
+    }
+    if (value && typeof value === "object") {
+        const result: Record<string, any> = {};
+        for (const [key, nestedValue] of Object.entries(value)) {
+            if (key === "src" && typeof nestedValue === "string") {
+                const match = nestedValue.match(/(\/api\/files\/(images|videos|backgrounds)\/.*)$/);
+                if (match) {
+                    result[key] = match[1];
+                } else {
+                    result[key] = nestedValue;
+                }
+            } else {
+                result[key] = sanitizeCanvasJson(nestedValue);
+            }
+        }
+        return result;
+    }
+    return value;
+}
+
 export async function loadFabricJsonSafely(canvas: fabric.Canvas | fabric.StaticCanvas, json: FabricJsonInput) {
     const stats = { missingAssets: false };
     try {

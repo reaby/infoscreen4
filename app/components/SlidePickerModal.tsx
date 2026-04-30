@@ -37,7 +37,7 @@ export default function SlidePickerModal({ bundle, onSelect, onClose }: Props) {
     };
 
     const handleDuplicate = async (name: string) => {
-        const newName = window.prompt("Duplicate as:", `${name}-copy`)?.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+        const newName = window.prompt("Duplicate as:", `${name}-copy`)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!newName) return;
         const res = await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`);
         if (!res.ok) return;

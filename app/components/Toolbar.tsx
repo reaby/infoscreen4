@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import * as fabric from "fabric";
 import { RgbaColorPicker } from "react-colorful";
 import type { RgbaColor } from "react-colorful";
-import { AlignLeft, AlignCenter, AlignRight, AlignJustify, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Crosshair, AlignStartVertical, AlignEndVertical, Undo2, Redo2, Bold, Italic, Underline, RectangleHorizontal, Type, ZoomIn, ZoomOut, Maximize2, HelpCircle, Trash2, Save, FolderOpen, FilePlus, ChevronDown, ImageIcon, Film, ArrowLeft, FolderPlus } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, AlignJustify, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Crosshair, AlignStartVertical, AlignEndVertical, Undo2, Redo2, Italic, Underline, RectangleHorizontal, Type, ZoomIn, ZoomOut, Maximize2, HelpCircle, Trash2, Save, FolderOpen, FilePlus, ChevronDown, ImageIcon, Film, ArrowLeft, FolderPlus } from "lucide-react";
 import SlidePickerModal from "./SlidePickerModal";
 import FileManagerDialog from "./FileManagerDialog";
-import { loadFabricJsonSafely } from "./fabricLoadHelpers";
+import { loadFabricJsonSafely, sanitizeCanvasJson } from "./fabricLoadHelpers";
 import { FabricVideo } from "./FabricVideo";
 
 interface ToolbarProps {
@@ -37,9 +37,9 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
     const [strokeWidth, setStrokeWidth] = useState(0);
     const [borderRadius, setBorderRadius] = useState(0);
     const [radiusEnabled, setRadiusEnabled] = useState(false);
-    const [fontFamily, setFontFamily] = useState("Arial");
+    const [fontFamily, setFontFamily] = useState("Montserrat");
     const [fontSize, setFontSize] = useState(24);
-    const [bold, setBold] = useState(false);
+    const [fontWeight, setFontWeight] = useState("normal");
     const [italic, setItalic] = useState(false);
     const [underline, setUnderline] = useState(false);
     const [fillPresetsOpen, setFillPresetsOpen] = useState(false);
@@ -98,14 +98,15 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
     const handleSave = async () => {
         if (!canvas) return;
         const defaultName = initialSlide?.trim()
-            ? initialSlide.trim().replace(/[^a-zA-Z0-9_-]/g, "-")
+            ? initialSlide.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-")
             : `slide-${Date.now()}`;
-        const name = window.prompt("Slide name:", defaultName)?.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+        const name = window.prompt("Slide name:", defaultName)?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!name) return;
+
         await fetch(`/api/bundles/${encodeURIComponent(activeBundle)}/slides/${encodeURIComponent(name)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(canvas.toJSON()),
+            body: JSON.stringify(sanitizeCanvasJson(canvas.toJSON())),
         });
     };
 
@@ -130,7 +131,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
     };
 
     const handleNewBundle = () => {
-        const name = window.prompt("New bundle name:")?.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+        const name = window.prompt("New bundle name:")?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
         if (!name) return;
         fetch("/api/bundles", {
             method: "POST",
@@ -193,9 +194,9 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
             setRadiusEnabled(canRadius);
 
             if (obj instanceof fabric.IText) {
-                setFontFamily(obj.get("fontFamily") ?? "Arial");
+                setFontFamily(obj.get("fontFamily") ?? "Montserrat");
                 setFontSize(obj.get("fontSize") ?? 24);
-                setBold(obj.get("fontWeight") === "bold");
+                setFontWeight((obj.get("fontWeight") ?? "normal").toString());
                 setItalic(obj.get("fontStyle") === "italic");
                 setUnderline(obj.get("underline") ?? false);
             }
@@ -244,10 +245,16 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
         const text = new fabric.Textbox("Text", {
             left: 100,
             top: 100,
-            fontSize: 24,
-            fill: "#000000",
-            fontFamily: "Arial Black",
+            fontSize: 48,
+            fill: "#ffffff",
+            fontFamily: "Inter",
+            fontWeight: 700,
+            stroke: "#000000",
+            strokeWidth: 2,
+            paintFirst: "stroke",
+            strokeLineJoin: "round",
         });
+
         canvas.add(text);
         canvas.requestRenderAll();
     };
@@ -255,16 +262,25 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
     const addImageFromFile = async (filename: string) => {
         if (!canvas) return;
         const fileUrl = `/api/files/images/${encodeURIComponent(filename)}`;
-        const image = await fabric.FabricImage.fromURL(fileUrl);
+        let newObject: fabric.FabricObject;
+
+        if (filename.toLowerCase().endsWith(".svg")) {
+            const { objects, options } = await fabric.loadSVGFromURL(fileUrl);
+            const validObjects = objects.filter((o): o is fabric.FabricObject => o !== null);
+            newObject = fabric.util.groupSVGElements(validObjects, options);
+        } else {
+            newObject = await fabric.FabricImage.fromURL(fileUrl);
+        }
+
         const center = canvas.getCenterPoint();
-        image.set({
+        newObject.set({
             left: center.x,
             top: center.y,
             originX: "center",
             originY: "center",
         });
-        canvas.add(image);
-        canvas.setActiveObject(image);
+        canvas.add(newObject);
+        canvas.setActiveObject(newObject);
         canvas.requestRenderAll();
     };
 
@@ -276,8 +292,8 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
         videoEl.loop = true;
         videoEl.muted = true;
         videoEl.playsInline = true;
-        videoEl.width = 640;
-        videoEl.height = 360;
+        videoEl.width = 1280;
+        videoEl.height = 720;
         videoEl.play().catch(() => {});
 
         const center = canvas.getCenterPoint();
@@ -287,8 +303,8 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
             originX: "center",
             originY: "center",
             videoSrc: fileUrl,
-            videoElWidth: 640,
-            videoElHeight: 360,
+            videoElWidth: 1280,
+            videoElHeight: 720,
             loop: true,
             muted: true,
         });
@@ -404,9 +420,8 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
     };
 
     const fontFamilies = [
-        "Arial", "Arial Black", "Verdana", "Tahoma", "Trebuchet MS",
-        "Georgia", "Times New Roman", "Courier New", "Impact",
-        "Comic Sans MS", "Palatino", "Garamond", "Bookman",
+        // "Arial", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Times New Roman", "Courier New", "Impact", "Comic Sans MS", // Systems
+        "Inter", "Lato", "Montserrat", "Open Sans", "Oswald", "Playfair Display", "Poppins", "Raleway", "Roboto", "Ubuntu"    // Google Fonts
     ];
 
     const handleFontFamily = (family: string) => {
@@ -427,13 +442,18 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
         canvas.requestRenderAll();
     };
 
-    const handleToggleBold = () => {
+    const handleFontWeight = (weight: string) => {
         if (!canvas) return;
         const obj = canvas.getActiveObject();
         if (!obj || !(obj instanceof fabric.IText)) return;
-        const next = obj.get("fontWeight") === "bold" ? "normal" : "bold";
-        obj.set({ fontWeight: next });
-        setBold(next === "bold");
+
+        let parsedWeight: string | number = weight;
+        if (weight !== "normal" && weight !== "bold") {
+             parsedWeight = parseInt(weight, 10);
+        }
+
+        obj.set({ fontWeight: parsedWeight });
+        setFontWeight(weight);
         canvas.requestRenderAll();
     };
 
@@ -588,8 +608,18 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
                 <select value={fontFamily} onChange={(e) => handleFontFamily(e.target.value)} className="toolbar-select" disabled={!canvas}>
                     {fontFamilies.map(f => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
                 </select>
+                <select value={fontWeight} onChange={(e) => handleFontWeight(e.target.value)} className="toolbar-select" disabled={!canvas} title="Font Weight">
+                    <option value="100">Thin (100)</option>
+                    <option value="200">Extra Light (200)</option>
+                    <option value="300">Light (300)</option>
+                    <option value="normal">Normal (400)</option>
+                    <option value="500">Medium (500)</option>
+                    <option value="600">Semi Bold (600)</option>
+                    <option value="bold">Bold (700)</option>
+                    <option value="800">Extra Bold (800)</option>
+                    <option value="900">Black (900)</option>
+                </select>
                 <input type="number" min={6} max={400} value={fontSize} onChange={(e) => handleFontSize(Number(e.target.value))} className="toolbar-number-input" disabled={!canvas} title="Font size" />
-                <button onClick={handleToggleBold} className={`toolbar-btn toolbar-btn-icon${bold ? " toolbar-btn-active" : ""}`} disabled={!canvas} title="Bold"><Bold size={15} /></button>
                 <button onClick={handleToggleItalic} className={`toolbar-btn toolbar-btn-icon${italic ? " toolbar-btn-active" : ""}`} disabled={!canvas} title="Italic"><Italic size={15} /></button>
                 <button onClick={handleToggleUnderline} className={`toolbar-btn toolbar-btn-icon${underline ? " toolbar-btn-active" : ""}`} disabled={!canvas} title="Underline"><Underline size={15} /></button>
             </div>

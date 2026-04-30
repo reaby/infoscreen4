@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     }
 
     // Sanitise filename
-    const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._\- ]/g, "_");
     if (!safeName) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
 
     await mkdir(bgDir, { recursive: true });

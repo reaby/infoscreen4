@@ -61,8 +61,8 @@ export class FabricVideo extends fabric.FabricImage {
         const source = document.createElement("source");
         source.src = videoSrc;
         videoEl.appendChild(source);
-        videoEl.width = videoElWidth;
-        videoEl.height = videoElHeight;
+        videoEl.width = 1280;
+        videoEl.height = 720;
         videoEl.loop = loop;
         videoEl.muted = muted;
         videoEl.playsInline = true;

@@ -3,7 +3,7 @@ import { readdir, mkdir } from "fs/promises";
 import path from "path";
 import { getBundlesDir } from "@/app/lib/paths";
 
-const NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
 
 export async function GET() {
     const bundlesDir = getBundlesDir();

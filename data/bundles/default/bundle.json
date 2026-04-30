@@ -1,17 +1,26 @@
 {
-  "backgroundColor": "#000000",
-  "width": 1280,
-  "height": 720,
+  "width": 1920,
+  "height": 1080,
   "autoScale": true,
   "slides": [
     {
-      "file": "test.json",
+      "file": "infoscreen4.json",
       "active": true
     },
     {
-      "file": "testing2.json",
+      "file": "techstack.json",
+      "active": true
+    },
+    {
+      "file": "features.json",
+      "active": true
+    },
+    {
+      "file": "slides.json",
       "active": true
     }
   ],
-  "backgroundFile": "bg_waves.mp4"
+  "backgroundColor": "#135d96",
+  "backgroundFile": "waves_bottom.mp4",
+  "defaultDuration": 20
 }

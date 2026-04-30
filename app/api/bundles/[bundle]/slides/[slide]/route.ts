@@ -4,7 +4,7 @@ import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
 import { getBundlesDir } from "@/app/lib/paths";
 
-const NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
 
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="-100 -105 200 190">
+	<g id="Star" fill="black" stroke="none">
+		<title>Classical Five-Point Star, by Adam Stanislav</title>
+		<desc>A star polygon, calculated and coded by hand to follow the classical star shape (sometimes called a concave decagon) traditionally constructed geometrically since antiquity.</desc>
+
+		<path d="m0-100l22.4514 69.0983 72.6543 0-58.7781 42.7051 22.4509 69.0983-58.7785-42.7051-58.7785 42.7051 22.4509-69.0983-58.7781-42.7051 72.6543 0z"/>
+	</g>
+</svg>
