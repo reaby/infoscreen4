@@ -6,6 +6,7 @@ import Link from "next/link";
 type ApiResult = {
     authenticated?: boolean;
     username?: string | null;
+    role?: string | null;
     message?: string;
 };
 
@@ -14,6 +15,7 @@ const emptyForm = { username: "", password: "" };
 export default function Home() {
     const [form, setForm] = useState(emptyForm);
     const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
     const [displayOptions, setDisplayOptions] = useState<{ id: string; name: string }[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState("");
     const [isRegister, setIsRegister] = useState(false);
@@ -51,6 +53,7 @@ export default function Home() {
             .then((data: ApiResult) => {
                 if (data.authenticated && data.username) {
                     setLoggedInUser(data.username);
+                    setUserRole(data.role ?? null);
                 }
             })
             .catch(() => null);
@@ -108,6 +111,7 @@ export default function Home() {
 
             if (result.authenticated && result.username) {
                 setLoggedInUser(result.username);
+                setUserRole(result.role ?? null);
                 setStatus({ type: "success", text: `Signed in as ${result.username}.` });
                 setForm(emptyForm);
             }
@@ -121,6 +125,7 @@ export default function Home() {
     const handleLogout = async () => {
         await fetch("/api/auth", { method: "DELETE" });
         setLoggedInUser(null);
+        setUserRole(null);
         setStatus({ type: "success", text: "Logged out." });
     };
 
@@ -143,9 +148,13 @@ export default function Home() {
                         )}
                     </select>
                     <Link href={`/display/${selectedDisplay || displayOptions[0]?.id || "1"}`} className="home-btn home-btn-primary">Display</Link>
-                    <Link href="/admin" className="home-btn home-btn-secondary">Admin</Link>
+                    <Link href="/send" className="home-btn home-btn-primary">Send Stream</Link>
+
                 </div>
-                <button className="home-btn home-btn-outlined" type="button" onClick={handleLogout}>Logout</button>
+                <div style={{display: "flex", gap: 12}}>
+                    {userRole === "admin" && <Link href="/admin" className="home-btn home-btn-secondary">Admin</Link>}
+                    <button className="home-btn home-btn-outlined" type="button" onClick={handleLogout}>Logout</button>
+                </div>
             </div>
         </main>
     ) : (

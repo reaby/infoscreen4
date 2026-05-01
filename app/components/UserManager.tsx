@@ -2,14 +2,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-type User = { username: string };
-
+type UserRole = "admin" | "streamer";
+type User = { username: string; role: UserRole };
 type StatusMessage = { type: "success" | "error"; text: string } | null;
 
 export default function UserManager() {
     const [users, setUsers] = useState<User[]>([]);
     const [newUserName, setNewUserName] = useState("");
     const [newUserPassword, setNewUserPassword] = useState("");
+    const [newUserRole, setNewUserRole] = useState<UserRole>("admin");
     const [status, setStatus] = useState<StatusMessage>(null);
     const [loading, setLoading] = useState(false);
 
@@ -41,7 +42,7 @@ export default function UserManager() {
             const response = await fetch("/api/users", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({ username, password, role: newUserRole }),
             });
             const result = await response.json();
             if (!response.ok) {
@@ -51,20 +52,21 @@ export default function UserManager() {
             setStatus({ type: "success", text: "User created." });
             setNewUserName("");
             setNewUserPassword("");
+            setNewUserRole("admin");
             await loadUsers();
         } catch {
             setStatus({ type: "error", text: "Network error while creating user." });
         } finally {
             setLoading(false);
         }
-    }, [loadUsers, newUserName, newUserPassword]);
+    }, [loadUsers, newUserName, newUserPassword, newUserRole]);
 
     const handleDeleteUser = useCallback(async (username: string) => {
         if (users.length <= 1) {
             setStatus({ type: "error", text: "At least one user must remain." });
             return;
         }
-        if (!window.confirm(`Delete user \"${username}\"?`)) return;
+        if (!window.confirm(`Delete user "${username}"?`)) return;
 
         setStatus(null);
         setLoading(true);
@@ -119,6 +121,18 @@ export default function UserManager() {
                         disabled={loading}
                     />
                 </label>
+                <label className="admin-user-field">
+                    Role
+                    <select
+                        className="admin-settings-input"
+                        value={newUserRole}
+                        onChange={(e) => setNewUserRole(e.target.value as UserRole)}
+                        disabled={loading}
+                    >
+                        <option value="admin">Admin</option>
+                        <option value="streamer">Streamer</option>
+                    </select>
+                </label>
                 <button
                     className="home-btn home-btn-primary"
                     type="button"
@@ -139,6 +153,7 @@ export default function UserManager() {
                         {users.map((user) => (
                             <li key={user.username} className="admin-user-row">
                                 <span>{user.username}</span>
+                                <span style={{ fontSize: 11, opacity: 0.5, marginLeft: 4 }}>{user.role}</span>
                                 <button
                                     className="admin-user-delete-btn"
                                     type="button"

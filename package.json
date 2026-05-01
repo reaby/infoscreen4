@@ -7,7 +7,8 @@
     "build": "next build",
     "build:webpack": "next build --webpack",
     "start": "NODE_ENV=production tsx --env-file=.env server.ts",
-    "lint": "eslint"
+    "lint": "eslint",
+    "gen-cert": "openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj \"/CN=infoscreen\""
   },
   "dependencies": {
     "fabric": "^7.2.0",

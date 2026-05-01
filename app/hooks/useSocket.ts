@@ -23,6 +23,12 @@ export interface BundleMetaUpdate {
     meta: Record<string, unknown>;
 }
 
+export interface StreamInfo {
+    streamId: string;
+    name: string;
+    socketId: string;
+}
+
 export interface ServerState {
     activeSlide: ActiveSlide | null;
     connectedDisplays: number;
@@ -31,6 +37,7 @@ export interface ServerState {
     displayStates: Record<string, ActiveSlide | null>;
     displayConnections: Record<string, number>;
     displayCycling: Record<string, boolean>;
+    streams: StreamInfo[];
 }
 
 export function useSocket(role: SocketRole, displayId?: string) {
@@ -44,6 +51,7 @@ export function useSocket(role: SocketRole, displayId?: string) {
         displayStates: {},
         displayConnections: {},
         displayCycling: {},
+        streams: [],
     });
     const [bundleMetaUpdate, setBundleMetaUpdate] = useState<BundleMetaUpdate | null>(null);
 
@@ -59,7 +67,14 @@ export function useSocket(role: SocketRole, displayId?: string) {
         socket.on("connect", () => setConnected(true));
         socket.on("disconnect", () => setConnected(false));
 
-        socket.on("state:sync", (s: ServerState) => setState(s));
+        socket.on("state:sync", (s: ServerState) => setState(prev => {
+            // Keep existing streams reference if the content hasn't changed,
+            // so StreamsPanel doesn't rebuild peer connections on every slide event.
+            const incoming = s.streams ?? [];
+            const same = prev.streams.length === incoming.length &&
+                prev.streams.every((p, i) => p.streamId === incoming[i]?.streamId && p.socketId === incoming[i]?.socketId);
+            return { ...s, streams: same ? prev.streams : incoming };
+        }));
         socket.on("display:state:sync", (s: ServerState) => setState(s));
         socket.on("displays:count", (count: number) =>
             setState((prev) => ({ ...prev, connectedDisplays: count }))
@@ -70,9 +85,11 @@ export function useSocket(role: SocketRole, displayId?: string) {
         socket.on("slide:clear", () =>
             setState((prev) => ({ ...prev, activeSlide: null }))
         );
-
         socket.on("bundle:meta", (update: BundleMetaUpdate) =>
             setBundleMetaUpdate(update)
+        );
+        socket.on("streams:update", (streams: StreamInfo[]) =>
+            setState((prev) => ({ ...prev, streams }))
         );
 
         return () => { socket.disconnect(); };
@@ -102,5 +119,27 @@ export function useSocket(role: SocketRole, displayId?: string) {
         socketRef.current?.emit("display:config", { configs });
     };
 
-    return { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate };
+    const showStream = (streamId: string, displayId: string) => {
+        socketRef.current?.emit("stream:show", { streamId, displayId });
+    };
+
+    const clearStream = (displayId: string) => {
+        socketRef.current?.emit("stream:clear", { displayId });
+    };
+
+    return {
+        connected,
+        state,
+        socket: socketRef.current,
+        showSlide,
+        clearSlide,
+        stopCycle,
+        updateBundleMeta,
+        activateBundle,
+        updateDisplayConfig,
+        bundleMetaUpdate,
+        showStream,
+        clearStream,
+        socketRef,
+    };
 }

@@ -2,7 +2,13 @@
   "users": [
     {
       "username": "admin",
-      "password": "admin"
+      "password": "admin",
+      "role": "admin"
+    },
+    {
+      "username": "user",
+      "password": "user",
+      "role": "streamer"
     }
   ]
 }

@@ -1,4 +1,6 @@
-import { createServer } from "http";
+import { createServer as createHttpServer } from "http";
+import { createServer as createHttpsServer } from "https";
+import { readFileSync, existsSync } from "fs";
 import next from "next";
 import { Server as SocketIOServer } from "socket.io";
 import { bundleManager } from "./app/lib/BundleManager";
@@ -7,6 +9,10 @@ import { getDisplayConfigs, ensureDisplayId, setDisplayConfigs, DisplayConfig } 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const hostname = process.env.HOST ?? "0.0.0.0";
+
+const sslKey = process.env.SSL_KEY ?? "key.pem";
+const sslCert = process.env.SSL_CERT ?? "cert.pem";
+const useHttps = existsSync(sslKey) && existsSync(sslCert);
 
 // Shared server state
 interface ActiveSlide {
@@ -23,6 +29,7 @@ interface ServerState {
     displayStates: Record<string, ActiveSlide | null>;
     displayConnections: Record<string, number>;
     displayCycling: Record<string, boolean>;
+    streams: StreamInfo[];
 }
 
 interface CycleSlide {
@@ -40,6 +47,21 @@ const displayCycleIndex: Record<string, number> = {};
 const displayCycleBaseDuration: Record<string, number> = {};
 let io: SocketIOServer | null = null;
 
+// WebRTC streaming state
+interface StreamInfo {
+    streamId: string;
+    name: string;
+    socketId: string;
+}
+const streams = new Map<string, StreamInfo>();          // streamId → info
+const socketToStream = new Map<string, string>();       // socketId → streamId
+const displayActiveStream = new Map<string, string>();  // displayId → streamId
+
+function emitAdminStreams() {
+    if (!io) return;
+    io.to("admins").emit("streams:update", [...streams.values()]);
+}
+
 function getServerState(): ServerState {
     return {
         activeSlide: null,
@@ -51,6 +73,7 @@ function getServerState(): ServerState {
         displayCycling: Object.fromEntries(
             Object.entries(displayCycleTimers).map(([displayId, timer]) => [displayId, timer !== null])
         ),
+        streams: [...streams.values()],
     };
 }
 
@@ -185,13 +208,30 @@ function startCycle(displayId: string, initial: ActiveSlide) {
     displayCycleTimers[displayId] = setTimeout(tick, initialDelay * 1000);
 }
 
+function cleanupStream(streamId: string, streamerSocketId: string) {
+    streams.delete(streamId);
+    socketToStream.delete(streamerSocketId);
+    // Notify all displays showing this stream
+    for (const [displayId, sid] of displayActiveStream.entries()) {
+        if (sid === streamId) {
+            displayActiveStream.delete(displayId);
+            io?.to(displayRoom(displayId)).emit("stream:cleared");
+        }
+    }
+    io?.emit("stream:ended", { streamId });
+    emitAdminStreams();
+}
+
 const app = next({ dev, turbopack: dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-    const httpServer = createServer((req, res) => {
-        handle(req, res);
-    });
+    const httpServer = useHttps
+        ? createHttpsServer(
+              { key: readFileSync(sslKey), cert: readFileSync(sslCert) },
+              (req, res) => handle(req, res)
+          )
+        : createHttpServer((req, res) => handle(req, res));
 
     io = new SocketIOServer(httpServer, {
         cors: { origin: "*" },
@@ -307,10 +347,69 @@ app.prepare().then(() => {
                 emitDisplayStatesToAll();
             });
         }
+
+        // --- WebRTC streaming signaling ---
+        if (role === "streamer") {
+            socket.on("stream:register", (data: { streamId: string; name: string }) => {
+                const info: StreamInfo = { streamId: data.streamId, name: data.name, socketId: socket.id };
+                streams.set(data.streamId, info);
+                socketToStream.set(socket.id, data.streamId);
+                emitAdminStreams();
+            });
+
+            socket.on("stream:unregister", (data: { streamId: string }) => {
+                cleanupStream(data.streamId, socket.id);
+            });
+
+            socket.on("disconnect", () => {
+                const streamId = socketToStream.get(socket.id);
+                if (streamId) cleanupStream(streamId, socket.id);
+            });
+        }
+
+        // Signal relay — any role can send/receive signals
+        socket.on("stream:watch", (data: { streamId: string }) => {
+            const stream = streams.get(data.streamId);
+            if (!stream) return;
+            io?.to(stream.socketId).emit("stream:viewer:joined", { viewerSocketId: socket.id });
+        });
+
+        socket.on("stream:unwatch", (data: { streamId: string }) => {
+            const stream = streams.get(data.streamId);
+            if (!stream) return;
+            io?.to(stream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
+        });
+
+        socket.on("stream:signal", (data: { to: string; data: unknown }) => {
+            io?.to(data.to).emit("stream:signal", { from: socket.id, data: data.data });
+        });
+
+        if (role === "admin") {
+            socket.on("stream:show", (data: { streamId: string; displayId: string }) => {
+                const stream = streams.get(data.streamId);
+                if (!stream) return;
+                displayActiveStream.set(data.displayId, data.streamId);
+                io?.to(displayRoom(data.displayId)).emit("stream:incoming", {
+                    streamId: stream.streamId,
+                    streamName: stream.name,
+                    streamSocketId: stream.socketId,
+                });
+            });
+
+            socket.on("stream:clear", (data: { displayId: string }) => {
+                displayActiveStream.delete(data.displayId);
+                io?.to(displayRoom(data.displayId)).emit("stream:cleared");
+            });
+        }
     });
 
     httpServer.listen(port, hostname, () => {
-        console.log(`> Ready on http://${hostname}:${port} [${dev ? "dev" : "production"}]`);
+        const proto = useHttps ? "https" : "http";
+        console.log(`> Ready on ${proto}://${hostname}:${port} [${dev ? "dev" : "production"}]`);
+        if (!useHttps) {
+            console.log(`> Running HTTP only — WebRTC screen/camera capture requires HTTPS on non-localhost origins.`);
+            console.log(`> To enable HTTPS, generate key.pem + cert.pem in the project root (see README).`);
+        }
 
         // Boot active bundles for all displays
         for (const config of displayConfigs) {

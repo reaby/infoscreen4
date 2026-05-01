@@ -1,9 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
 
+export type UserRole = "admin" | "streamer";
+
 export interface User {
     username: string;
     password: string;
+    role: UserRole;
 }
 
 export interface UsersFile {
@@ -21,9 +24,9 @@ async function readUsersFile(): Promise<UsersFile> {
         await ensureDataDirectory();
         const content = await fs.readFile(usersFilePath, "utf8");
         const parsed = JSON.parse(content ?? "{}");
-        return {
-            users: Array.isArray(parsed?.users) ? parsed.users : [],
-        };
+        const users: User[] = Array.isArray(parsed?.users) ? parsed.users : [];
+        // Migrate existing users that predate the role field
+        return { users: users.map((u) => ({ ...u, role: u.role ?? "admin" })) };
     } catch {
         await writeUsersFile({ users: [] });
         return { users: [] };
@@ -54,7 +57,7 @@ export async function validateUser(username: string, password: string) {
     return user?.password === password;
 }
 
-export async function createUser(username: string, password: string) {
+export async function createUser(username: string, password: string, role: UserRole = "admin") {
     const data = await readUsersFile();
     const normalized = username.trim();
     if (!normalized) {
@@ -63,7 +66,7 @@ export async function createUser(username: string, password: string) {
     if (data.users.some((user) => user.username === normalized)) {
         throw new Error("User already exists");
     }
-    data.users.push({ username: normalized, password });
+    data.users.push({ username: normalized, password, role });
     await writeUsersFile(data);
     return normalized;
 }

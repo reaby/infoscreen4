@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
 
     const user = await getUserByUsername(username);
-    return NextResponse.json({ authenticated: Boolean(user), username: user?.username ?? null });
+    return NextResponse.json({ authenticated: Boolean(user), username: user?.username ?? null, role: user?.role ?? null });
 }
 
 export async function POST(req: NextRequest) {
@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
 
     const existingUsers = await getAllUsers();
     if (existingUsers.length === 0) {
-        const normalized = await createUser(username, password);
-        const response = NextResponse.json({ authenticated: true, username: normalized, created: true, message: "First user created and signed in." });
+        const normalized = await createUser(username, password, "admin");
+        const response = NextResponse.json({ authenticated: true, username: normalized, role: "admin", created: true, message: "First user created and signed in." });
         response.cookies.set(COOKIE_NAME, normalized, getCookieOptions(req));
         return response;
     }
@@ -48,7 +48,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: "Invalid username or password." }, { status: 401 });
     }
 
-    const response = NextResponse.json({ authenticated: true, username });
+    const user = await getUserByUsername(username);
+    const response = NextResponse.json({ authenticated: true, username, role: user?.role ?? "admin" });
     response.cookies.set(COOKIE_NAME, username, getCookieOptions(req));
     return response;
 }

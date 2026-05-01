@@ -1,22 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createUser, deleteUser, getAllUsers } from "../../lib/auth";
+import { createUser, deleteUser, getAllUsers, UserRole } from "../../lib/auth";
 
 export async function GET() {
     const users = await getAllUsers();
-    return NextResponse.json(users.map(({ username }) => ({ username })));
+    return NextResponse.json(users.map(({ username, role }) => ({ username, role })));
 }
 
 export async function POST(req: NextRequest) {
     const body = await req.json();
     const username = String(body?.username ?? "").trim();
     const password = String(body?.password ?? "");
+    const role: UserRole = body?.role === "streamer" ? "streamer" : "admin";
 
     if (!username || !password) {
         return NextResponse.json({ message: "Username and password are required." }, { status: 400 });
     }
 
     try {
-        await createUser(username, password);
+        await createUser(username, password, role);
         return NextResponse.json({ created: true });
     } catch (error) {
         return NextResponse.json(

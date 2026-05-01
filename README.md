@@ -11,6 +11,7 @@ Digital signage system built for LAN parties, events, and dynamic displays. Info
   - Shapes, customizable colors, outlines, and dropshadows.
 - **Bundle Management**: Create "Bundles" consisting of multiple slides, and assign different bundles to different physical displays.
 - **Media Manager**: Built-in file management for uploading background images, videos, and generic assets.
+- **Live WebRTC Streaming**: Stream a screen or webcam directly to any display in real-time.
 - **Internal JSON Database**: Simple filesystem-based JSON storage under `/data`. No complex external database setup required.
 
 ## Getting Started
@@ -31,6 +32,45 @@ Make sure you have [Node.js](https://nodejs.org/) installed. This project uses `
    - Access the main dashboard at `/`
    - Access the admin panel at `/admin`
    - Access a specific display endpoint at `/display/[id]`
+   - Open the stream sender at `/send`
+
+## Live WebRTC Streaming
+
+Infoscreen4 supports pushing a live screen share or webcam feed to any display using WebRTC. Signaling is handled over the existing Socket.IO connection — no separate media server is required.
+
+### How it works
+
+1. A logged-in user opens `/send`, enters a stream name, and clicks **Share Screen** or **Use Camera**.
+2. The stream appears in the admin panel under the **Streams** tab with a live preview thumbnail.
+3. The admin clicks **Show on display** to push the stream to a selected display. The display renders it fullscreen, pausing any running slide cycle.
+4. When the stream stops (or admin clicks **Clear**), the display resumes normal slide playback.
+
+### HTTPS requirement
+
+Browsers only allow screen capture and camera access in **secure contexts** (HTTPS or `localhost`). Accessing the app over a plain HTTP LAN address will block the `/send` page from capturing media.
+
+**Generate a self-signed certificate** (requires OpenSSL — included with Git for Windows):
+
+```bash
+pnpm run gen-cert
+```
+
+This creates `key.pem` and `cert.pem` in the project root. The server automatically detects these files on startup and switches to HTTPS:
+
+```
+> Ready on https://0.0.0.0:3000 [dev]
+```
+
+On first visit, browsers will show an "insecure certificate" warning because the cert is self-signed. Click **Advanced → Proceed** once per browser. After that, screen/camera capture works normally on any LAN client.
+
+You can override the default cert paths with environment variables:
+
+```env
+SSL_KEY=/path/to/key.pem
+SSL_CERT=/path/to/cert.pem
+```
+
+If no cert files are found, the server falls back to plain HTTP (fine for `localhost` development).
 
 ## Deployment (Production)
 

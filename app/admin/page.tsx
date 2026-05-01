@@ -6,13 +6,14 @@ import dynamic from "next/dynamic";
 import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, User, ChevronDown, Globe
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, User, ChevronDown, Globe, Radio
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
 import UserManager from "../components/UserManager";
 import AdminContextMenu from "../components/AdminContextMenu";
+import StreamsPanel from "../components/StreamsPanel";
 const DisplaySlide = dynamic(() => import("../components/DisplaySlide"), { ssr: false });
 
 interface BundleInfo {
@@ -44,7 +45,7 @@ export default function AdminDashboard() {
     const [currentUser, setCurrentUser] = useState<string | null>(null);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement | null>(null);
-    const { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate } = useSocket("admin");
+    const { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate, showStream, clearStream, socketRef } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState<string | null>(null);
     const [displayDrafts, setDisplayDrafts] = useState<DisplayConfig[]>([]);
@@ -62,7 +63,7 @@ export default function AdminDashboard() {
             try {
                 const response = await fetch("/api/auth");
                 const data = await response.json();
-                if (!data.authenticated) {
+                if (!data.authenticated || data.role !== "admin") {
                     router.replace("/");
                     return;
                 }
@@ -105,7 +106,7 @@ export default function AdminDashboard() {
     const [selectedSlide, setSelectedSlide] = useState<string | null>(null);
     const [previewJson, setPreviewJson] = useState<object | null>(null);
     const [liveJson, setLiveJson] = useState<object | null>(null);
-    const [previewTab, setPreviewTab] = useState<"preview" | "live" | "settings" | "users" | "displays">("preview");
+    const [previewTab, setPreviewTab] = useState<"preview" | "live" | "settings" | "users" | "displays" | "streams">("preview");
     const [bundleMeta, setBundleMeta] = useState<BundleMeta>({});
     const [liveBundleMeta, setLiveBundleMeta] = useState<BundleMeta>({});
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
@@ -114,6 +115,7 @@ export default function AdminDashboard() {
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [confirmActivateBundle, setConfirmActivateBundle] = useState<string | null>(null);
+    const [displayActiveStreams, setDisplayActiveStreams] = useState<Record<string, string>>({});
     const bundleMetaRef = useRef<BundleMeta>({});
     const liveLoadSeqRef = useRef(0);
 
@@ -907,6 +909,18 @@ export default function AdminDashboard() {
                                             Displays
                                         </button>
                                     )}
+                                    <button
+                                        className={`admin-preview-tab ${previewTab === "streams" ? "active" : ""}`}
+                                        type="button"
+                                        onClick={() => setPreviewTab("streams")}
+                                        title="Live streams"
+                                    >
+                                        <Radio size={11} />
+                                        {state.streams?.length > 0 && (
+                                            <span className="admin-live-dot" />
+                                        )}
+                                        Streams
+                                    </button>
                                 </div>
 
                                 <button
@@ -999,6 +1013,34 @@ export default function AdminDashboard() {
                                         Cancel
                                     </button>
                                 </div>
+                            </div>
+                        ) : previewTab === "streams" ? (
+                            <div className="admin-display-config-panel">
+                                <div className="admin-display-config-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <strong>Live Streams</strong>
+                                    <a href="/send" target="_blank" className="admin-nav-btn" style={{ textDecoration: "none" }}>
+                                        <Radio size={12} /> Open /send
+                                    </a>
+                                </div>
+                                <StreamsPanel
+                                    streams={state.streams ?? []}
+                                    socketRef={socketRef}
+                                    displayConfigs={state.displayConfigs}
+                                    selectedDisplay={effectiveSelectedDisplay}
+                                    displayActiveStreams={displayActiveStreams}
+                                    onShowStream={(streamId, displayId) => {
+                                        showStream(streamId, displayId);
+                                        setDisplayActiveStreams((prev) => ({ ...prev, [displayId]: streamId }));
+                                    }}
+                                    onClearStream={(displayId) => {
+                                        clearStream(displayId);
+                                        setDisplayActiveStreams((prev) => {
+                                            const next = { ...prev };
+                                            delete next[displayId];
+                                            return next;
+                                        });
+                                    }}
+                                />
                             </div>
                         ) : (
                             <>
