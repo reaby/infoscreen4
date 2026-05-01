@@ -450,12 +450,12 @@ export default function AdminDashboard() {
         // Add to bundle meta as well
         const meta = await fetch(`/api/bundles/${encodeURIComponent(bundle)}`).then(r => r.json());
         if (meta && Array.isArray(meta.slides)) {
-             meta.slides.push(newName);
-             await fetch(`/api/bundles/${encodeURIComponent(bundle)}`, {
-                 method: "PATCH",
-                 headers: { "Content-Type": "application/json" },
-                 body: JSON.stringify({ slides: meta.slides })
-             });
+            meta.slides.push(newName);
+            await fetch(`/api/bundles/${encodeURIComponent(bundle)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ slides: meta.slides })
+            });
         }
 
         await loadBundles();
@@ -559,582 +559,586 @@ export default function AdminDashboard() {
 
     const previewHeaderTitle =
         previewTab === "preview" ? selectedSlide :
-        previewTab === "live" ? selectedDisplayState?.slide :
-        previewTab === "users" ? "User management" :
-        selectedBundle;
+            previewTab === "live" ? selectedDisplayState?.slide :
+                previewTab === "users" ? "User management" :
+                    selectedBundle;
 
     return (
         <>
-        <div className="admin-layout">
+            <div className="admin-layout">
 
-            {/* ── Header ─────────────────────────────── */}
-            <header className="admin-header">
-                <div className="admin-header-brand">
-                    <span className="admin-brand-text">Infoscreen<em>4</em></span>
-                    <span className="admin-brand-sub">Admin</span>
-                </div>
+                {/* ── Header ─────────────────────────────── */}
+                <header className="admin-header">
+                    <div className="admin-header-brand">
+                        <span className="admin-brand-text">Infoscreen<em>4</em></span>
+                        <span className="admin-brand-sub">Admin</span>
+                    </div>
 
-                <div className="admin-header-status">
-                    <span className={`admin-ws-pill ${connected ? "ok" : "off"}`}>
-                        <span className="admin-ws-dot" />
-                        {connected ? "Connected" : "Disconnected"}
-                    </span>
-                    <span className="admin-display-pill">
-                        {state.connectedDisplays > 0
-                            ? <><Monitor size={13} />&nbsp;{state.connectedDisplays} display{state.connectedDisplays !== 1 ? "s" : ""}</>
-                            : <><MonitorOff size={13} />&nbsp;No displays</>}
-                    </span>
-                    {selectedDisplayConfig && (
-                        <span className="admin-now-pill">
-                            {selectedDisplayConfig.name}
+                    <div className="admin-header-status">
+                        <span className={`admin-ws-pill ${connected ? "ok" : "off"}`}>
+                            <span className="admin-ws-dot" />
+                            {connected ? "Connected" : "Disconnected"}
                         </span>
-                    )}
-                    {selectedDisplayState && (
-                        <span className="admin-now-pill">
-                            <Play size={11} />
-                            &nbsp;{selectedDisplayState.bundle}&nbsp;/&nbsp;<strong>{selectedDisplayState.slide}</strong>
+                        <span className="admin-display-pill">
+                            {state.connectedDisplays > 0
+                                ? <><Monitor size={13} />&nbsp;{state.connectedDisplays} display{state.connectedDisplays !== 1 ? "s" : ""}</>
+                                : <><MonitorOff size={13} />&nbsp;No displays</>}
                         </span>
-                    )}
-                </div>
-
-                <nav className="admin-header-nav">
-                    {state.displayConfigs.length > 0 && (
-                        <>
-                            <select
-                                className="admin-display-select"
-                                value={effectiveSelectedDisplay ?? ""}
-                                onChange={(e) => setSelectedDisplay(e.target.value)}
-                                title="Select display"
-                            >
-                                {state.displayConfigs.map((conf) => (
-                                    <option key={conf.id} value={conf.id}>{conf.name}</option>
-                                ))}
-                            </select>
-                        </>
-                    )}
-                    <button className="admin-nav-btn" onClick={loadBundles} title="Refresh">
-                        <RefreshCw size={13} />
-                    </button>
-
-                    <div className="admin-user-menu" ref={userMenuRef}>
-                        <button
-                            className="admin-nav-btn admin-user-menu-trigger"
-                            type="button"
-                            onClick={() => setUserMenuOpen((current) => !current)}
-                            title="User menu"
-                        >
-                            <User size={13} />
-                            <span>{currentUser ?? "Admin"}</span>
-                            <ChevronDown size={12} />
-                        </button>
-                        {userMenuOpen && (
-                            <div className="admin-user-menu-popover">
-                                <div className="admin-user-menu-title">Signed in as</div>
-                                <div className="admin-user-menu-username">{currentUser ?? "unknown"}</div>
-                                <button
-                                    className="admin-user-menu-item"
-                                    type="button"
-                                    onClick={() => {
-                                        setPreviewTab("users");
-                                        setUserMenuOpen(false);
-                                    }}
-                                >
-                                    Users
-                                </button>
-                                <button className="admin-user-menu-item" type="button" onClick={handleLogout}>
-                                    Logout
-                                </button>
-                            </div>
+                        {selectedDisplayConfig && (
+                            <span className="admin-now-pill">
+                                {selectedDisplayConfig.name}
+                            </span>
+                        )}
+                        {selectedDisplayState && (
+                            <span className="admin-now-pill">
+                                <Play size={11} />
+                                &nbsp;{selectedDisplayState.bundle}&nbsp;/&nbsp;<strong>{selectedDisplayState.slide}</strong>
+                            </span>
                         )}
                     </div>
-                </nav>
-            </header>
 
-
-            {/* ── Main 3-column area ─────────────────── */}
-            <main className="admin-main">
-            {dialog && (
-                <div className="slide-picker-overlay" onClick={() => dialog.resolve(null)}>
-                    <div className="slide-picker-modal" onClick={(e) => e.stopPropagation()} style={{ width: 400 }}>
-                        <div className="slide-picker-header">
-                            <span>{dialog.type === 'prompt' ? 'Input' : 'Confirm'}</span>
-                            <button className="toolbar-btn toolbar-btn-icon" onClick={() => dialog.resolve(null)} title="Cancel">?</button>
-                        </div>
-                        <div className="slide-picker-body">
-                            <span className="toolbar-label" style={{ marginBottom: 10, display: "block" }}>{dialog.text}</span>
-                            {dialog.type === 'prompt' && (
-                                <input
-                                    type="text"
-                                    defaultValue={dialog.defaultVal}
-                                    style={{ width: "100%", padding: "6px", marginBottom: "10px", background: "#3a3a3a", color: "white", border: "1px solid #555" }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') dialog.resolve(e.currentTarget.value);
-                                        if (e.key === 'Escape') dialog.resolve(null);
-                                    }}
-                                    autoFocus
-                                    ref={(el) => { if (el) el.select(); }}
-                                />
-                            )}
-                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                                <button className="toolbar-btn" onClick={() => dialog.resolve(null)}>Cancel</button>
-                                <button className="toolbar-btn" style={{ background: "#0078D4" }} onClick={(e) => {
-                                    if (dialog.type === 'prompt') {
-                                        const input = e.currentTarget.parentElement?.parentElement?.querySelector('input');
-                                        dialog.resolve(input?.value ?? null);
-                                    } else {
-                                        dialog.resolve(true);
-                                    }
-                                }}>OK</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-                <AdminContextMenu
-                    visible={adminContextMenu.visible}
-                    x={adminContextMenu.x}
-                    y={adminContextMenu.y}
-                    items={adminContextMenu.items}
-                    onClose={() => setAdminContextMenu((prev) => ({ ...prev, visible: false }))}
-                />
-
-                {/* Column 1 – Bundles */}
-                <aside className="admin-col admin-col-bundles">
-                    <div className="admin-col-header">
-                        <span>Bundles</span>
-                        <button className="admin-icon-btn" onClick={handleNewBundle} title="New bundle">
-                            <FolderPlus size={14} />
-                        </button>
-                    </div>
-                    <ul className="admin-list">
-                        {bundles.length === 0 && <li className="admin-list-empty">No bundles</li>}
-                        {bundles.map((b) => (
-                            <li
-                                key={b.name}
-                                onContextMenu={(e) => {
-                                    e.preventDefault();
-                                    setAdminContextMenu({
-                                        visible: true,
-                                        x: e.clientX,
-                                        y: e.clientY,
-                                        items: [
-                                            { label: "Rename Bundle", onClick: () => handleRenameBundle(b.name) },
-                                            { label: "Duplicate Bundle", onClick: () => handleDuplicateBundle(b.name) },
-                                            { label: "Delete Bundle", danger: true, onClick: () => handleDeleteBundle(b.name) },
-                                        ]
-                                    });
-                                }}
-                            >
-                                <div className={`admin-list-item ${selectedBundle === b.name ? "selected" : ""}`}>
-                                    <button
-                                        className="admin-list-item-name-btn"
-                                        onClick={() => { setSelectedBundle(b.name); setSelectedSlide(null); }}
-                                    >
-                                        <span className="">{b.name}</span>
-                                    </button>
-                                    <span className="admin-list-item-count">{b.slides.length}</span>
-                                    <button
-                                        className={`admin-bundle-active-btn${selectedDisplayState?.bundle === b.name ? " on" : ""}`}
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            if (!effectiveSelectedDisplay) return;
-                                            setConfirmActivateBundle(b.name);
-                                        }}
-                                        title={selectedDisplayState?.bundle === b.name ? "Active bundle" : "Set as active bundle"}
-                                    >
-                                        <Zap size={11} />
-                                    </button>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </aside>
-
-                {/* Column 2 – Slides */}
-                <aside className="admin-col admin-col-slides">
-                    <div className="admin-col-header">
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span>Slides</span>
-
-                        </div>
-                            <button
-                                className="admin-icon-btn"
-                                onClick={() => {
-                                    if (!selectedBundle) return;
-                                    router.push(`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}`);
-                                }}
-                                title={selectedBundle ? "Create new slide" : "Select a bundle first"}
-                                disabled={!selectedBundle}
-                            >
-                                <FilePlus size={14} />
-                            </button>
-                            <button
-                                className="admin-icon-btn"
-                                onClick={async () => {
-                                    if (!selectedBundle) return;
-                                    const url = await askPrompt("Website URL (e.g. https://example.com):");
-                                    if (!url) return;
-                                    const titleStr = await askPrompt("Slide title (optional):");
-                                    const title = titleStr ? titleStr.trim() : "";
-                                    const nextSlides = [...(bundleMeta?.slides || []), {
-                                        id: Date.now().toString(),
-                                        type: "website" as const,
-                                        data: url,
-                                        title: title || undefined,
-                                        active: true
-                                    }];
-                                    saveMeta({ slides: nextSlides as BundleSlideEntry[] });
-                                    setSelectedSlide(nextSlides[nextSlides.length - 1].id);
-                                }}
-                                title={selectedBundle ? "Add website slide" : "Select a bundle first"}
-                                disabled={!selectedBundle}
-                            >
-                                <Globe size={14} />
-                            </button>
-                    </div>
-                    <ul className="admin-list">
-                        {!selectedBundle && <li className="admin-list-empty">Select a bundle</li>}
-                        {selectedBundle && slides.length === 0 && <li className="admin-list-empty">No slides</li>}
-                        {slides.map((slide) => {
-                            const existingEntry = entryBySlide.get(slide);
-                            const isEnabled = existingEntry?.active !== false;
-                            const isDragging = dragSlide === slide;
-                            const isDragOver = dragOverSlide === slide && dragSlide !== slide;
-                            return (
-                            <li
-                                key={slide}
-                                draggable={true}
-                                onContextMenu={(e) => {
-                                    e.preventDefault();
-                                    setAdminContextMenu({
-                                        visible: true,
-                                        x: e.clientX,
-                                        y: e.clientY,
-                                        items: [
-                                            { label: existingEntry?.type === "website" ? "Edit URL" : "Rename File", onClick: () => handleRenameSlide(selectedBundle!, slide) },
-{ label: "Edit Title", onClick: async () => {
-    const newTitle = await askPrompt("Slide Title:", existingEntry?.title || slide);
-    if (newTitle !== null) {
-        const normalized = new Map(orderedEntries.map((e) => [e.id, e]));
-const next = slides.map(id => id === slide ? { ...(normalized.get(id) ?? { id, type: "fabric" as const, data: id + ".json" }), title: newTitle } : (normalized.get(id) ?? { id, type: "fabric" as const, data: id + ".json" }));
-        saveMeta({ slides: next });
-    }
-} },
-                                            { label: "Duplicate Slide", onClick: () => handleDuplicateSlide(selectedBundle!, slide) },
-                                            { label: "Delete Slide", danger: true, onClick: () => handleDeleteSlide(selectedBundle!, slide) }
-                                        ]
-                                    });
-                                }}
-                                onDragStart={(e) => {
-                                    setDragSlide(slide);
-                                    setDragOverSlide(slide);
-                                    e.dataTransfer.effectAllowed = "move";
-                                    e.dataTransfer.setData("text/plain", slide);
-                                }}
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    if (dragOverSlide !== slide) setDragOverSlide(slide);
-                                    e.dataTransfer.dropEffect = "move";
-                                }}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    const source = dragSlide ?? e.dataTransfer.getData("text/plain");
-                                    if (source) moveSlide(source, slide);
-                                    setDragSlide(null);
-                                    setDragOverSlide(null);
-                                }}
-                                onDragEnd={() => {
-                                    setDragSlide(null);
-                                    setDragOverSlide(null);
-                                }}
-                            >
-                                <div className={`admin-list-item admin-list-item-draggable ${selectedSlide === slide ? "selected" : ""} ${isActive(selectedBundle!, slide) ? "playing" : ""} ${isDragging ? "dragging" : ""} ${isDragOver ? "drag-over" : ""}`} title="Drag to reorder">
-                                    <span className="admin-playing-icon-placeholder">
-                                        {isActive(selectedBundle!, slide) ? <Play size={14} className="admin-playing-icon" /> : null}
-                                    </span>
-                                    <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{existingEntry?.title || slide}</span>
-                                    <button
-                                        className={`admin-slide-toggle${isEnabled ? " on" : ""}`}
-                                        title={isEnabled ? "Remove from cycle" : "Add to cycle"}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
-                                            const next = slides.map((name) => {
-                                                const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
-                                                if (name !== slide) return entry;
-                                                return { ...entry, active: !isEnabled };
-                                            });
-                                            saveMeta({ slides: next });
-                                        }}
-                                    >{isEnabled ? "✓" : "–"}</button>
-                                </div>
-                            </li>
-                            );
-                        })}
-                    </ul>
-                </aside>
-
-                {/* Column 3 – Preview + details */}
-                <section className="admin-col admin-col-preview">
-                    <div className="admin-col-header">
-                        <div className="admin-preview-header-row">
-                            <div className="admin-preview-tabs-left">
-                                <button
-                                    className={`admin-preview-tab ${previewTab === "preview" ? "active" : ""}`}
-                                    onClick={() => setPreviewTab("preview")}
-                                >Preview</button>
-                                <button
-                                    className={`admin-preview-tab ${previewTab === "settings" ? "active" : ""}`}
-                                    onClick={() => setPreviewTab("settings")}
-                                    disabled={!selectedBundle}
-                                    title="Bundle settings"
+                    <nav className="admin-header-nav">
+                        {state.displayConfigs.length > 0 && (
+                            <>
+                                <select
+                                    className="admin-display-select"
+                                    value={effectiveSelectedDisplay ?? ""}
+                                    onChange={(e) => setSelectedDisplay(e.target.value)}
+                                    title="Select display"
                                 >
-                                    <Settings size={11} /> Settings
-                                </button>
-                                {state.displayConfigs.length > 0 && (
-                                    <button
-                                        className={`admin-preview-tab ${previewTab === "displays" ? "active" : ""}`}
-                                        type="button"
-                                        onClick={() => setPreviewTab("displays")}
-                                        title="Display settings"
-                                    >
-                                        Displays
-                                    </button>
-                                )}
-                            </div>
+                                    {state.displayConfigs.map((conf) => (
+                                        <option key={conf.id} value={conf.id}>{conf.name}</option>
+                                    ))}
+                                </select>
+                            </>
+                        )}
+                        <button className="admin-nav-btn" onClick={loadBundles} title="Refresh">
+                            <RefreshCw size={13} />
+                        </button>
 
+                        <div className="admin-user-menu" ref={userMenuRef}>
                             <button
-                                className={`admin-preview-tab admin-preview-tab-live-edge ${previewTab === "live" ? "active" : ""} ${selectedDisplayState ? "live" : ""}`}
-                                onClick={() => setPreviewTab("live")}
+                                className="admin-nav-btn admin-user-menu-trigger"
+                                type="button"
+                                onClick={() => setUserMenuOpen((current) => !current)}
+                                title="User menu"
                             >
-                                {selectedDisplayState && <span className="admin-live-dot" />}Live
+                                <User size={13} />
+                                <span>{currentUser ?? "Admin"}</span>
+                                <ChevronDown size={12} />
+                            </button>
+                            {userMenuOpen && (
+                                <div className="admin-user-menu-popover">
+                                    <div className="admin-user-menu-title">Signed in as</div>
+                                    <div className="admin-user-menu-username">{currentUser ?? "unknown"}</div>
+                                    <button
+                                        className="admin-user-menu-item"
+                                        type="button"
+                                        onClick={() => {
+                                            setPreviewTab("users");
+                                            setUserMenuOpen(false);
+                                        }}
+                                    >
+                                        Users
+                                    </button>
+                                    <button className="admin-user-menu-item" type="button" onClick={handleLogout}>
+                                        Logout
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </nav>
+                </header>
+
+
+                {/* ── Main 3-column area ─────────────────── */}
+                <main className="admin-main">
+                    {dialog && (
+                        <div className="slide-picker-overlay" onClick={() => dialog.resolve(null)}>
+                            <div className="slide-picker-modal" onClick={(e) => e.stopPropagation()} style={{ width: 400 }}>
+                                <div className="slide-picker-header">
+                                    <span>{dialog.type === 'prompt' ? 'Input' : 'Confirm'}</span>
+                                    <button className="toolbar-btn toolbar-btn-icon" onClick={() => dialog.resolve(null)} title="Cancel">?</button>
+                                </div>
+                                <div className="slide-picker-body">
+                                    <span className="toolbar-label" style={{ marginBottom: 10, display: "block" }}>{dialog.text}</span>
+                                    {dialog.type === 'prompt' && (
+                                        <input
+                                            type="text"
+                                            defaultValue={dialog.defaultVal}
+                                            style={{ width: "100%", padding: "6px", marginBottom: "10px", background: "#3a3a3a", color: "white", border: "1px solid #555" }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') dialog.resolve(e.currentTarget.value);
+                                                if (e.key === 'Escape') dialog.resolve(null);
+                                            }}
+                                            autoFocus
+                                            ref={(el) => { if (el) el.select(); }}
+                                        />
+                                    )}
+                                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                                        <button className="toolbar-btn" onClick={() => dialog.resolve(null)}>Cancel</button>
+                                        <button className="toolbar-btn" style={{ background: "#0078D4" }} onClick={(e) => {
+                                            if (dialog.type === 'prompt') {
+                                                const input = e.currentTarget.parentElement?.parentElement?.querySelector('input');
+                                                dialog.resolve(input?.value ?? null);
+                                            } else {
+                                                dialog.resolve(true);
+                                            }
+                                        }}>OK</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <AdminContextMenu
+                        visible={adminContextMenu.visible}
+                        x={adminContextMenu.x}
+                        y={adminContextMenu.y}
+                        items={adminContextMenu.items}
+                        onClose={() => setAdminContextMenu((prev) => ({ ...prev, visible: false }))}
+                    />
+
+                    {/* Column 1 – Bundles */}
+                    <aside className="admin-col admin-col-bundles">
+                        <div className="admin-col-header">
+                            <span>Bundles</span>
+                            <button className="admin-icon-btn" onClick={handleNewBundle} title="New bundle">
+                                <FolderPlus size={14} />
                             </button>
                         </div>
-                    </div>
-
-                    {previewTab === "settings" ? (
-                        <BundleSettingsPanel
-                            selectedBundle={selectedBundle}
-                            bundleMeta={bundleMeta}
-                            metaDraft={metaDraft}
-                            setMetaDraft={setMetaDraft}
-                            saveMeta={saveMeta}
-                        />
-                    ) : previewTab === "users" ? (
-                        <UserManager />
-                    ) : previewTab === "displays" ? (
-                        <div className="admin-display-config-panel">
-                            <div className="admin-display-config-header">
-                                <strong>Display configuration</strong>
-                            </div>
-                            {displayDrafts.map((config, index) => (
-                                <div className="admin-display-config-row" key={config.id}>
-                                    <div className="admin-display-config-field">
-                                        <label className="admin-label">ID</label>
-                                        <input
-                                            value={config.id}
-                                            onChange={(e) => {
-                                                const nextId = e.target.value.trim();
-                                                setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, id: nextId || item.id } : item));
+                        <ul className="admin-list">
+                            {bundles.length === 0 && <li className="admin-list-empty">No bundles</li>}
+                            {bundles.map((b) => (
+                                <li
+                                    key={b.name}
+                                    onContextMenu={(e) => {
+                                        e.preventDefault();
+                                        setAdminContextMenu({
+                                            visible: true,
+                                            x: e.clientX,
+                                            y: e.clientY,
+                                            items: [
+                                                { label: "Rename Bundle", onClick: () => handleRenameBundle(b.name) },
+                                                { label: "Duplicate Bundle", onClick: () => handleDuplicateBundle(b.name) },
+                                                { label: "Delete Bundle", danger: true, onClick: () => handleDeleteBundle(b.name) },
+                                            ]
+                                        });
+                                    }}
+                                >
+                                    <div className={`admin-list-item ${selectedBundle === b.name ? "selected" : ""}`}>
+                                        <button
+                                            className="admin-list-item-name-btn"
+                                            onClick={() => { setSelectedBundle(b.name); setSelectedSlide(null); }}
+                                        >
+                                            <span className="">{b.name}</span>
+                                        </button>
+                                        <span className="admin-list-item-count">{b.slides.length}</span>
+                                        <button
+                                            className={`admin-bundle-active-btn${selectedDisplayState?.bundle === b.name ? " on" : ""}`}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (!effectiveSelectedDisplay) return;
+                                                setConfirmActivateBundle(b.name);
                                             }}
-                                            className="admin-settings-input"
-                                            style={{ width: 100 }}
-                                        />
+                                            title={selectedDisplayState?.bundle === b.name ? "Active bundle" : "Set as active bundle"}
+                                        >
+                                            <Zap size={11} />
+                                        </button>
                                     </div>
-                                    <div className="admin-display-config-field">
-                                        <label className="admin-label">Name</label>
-                                        <input
-                                            value={config.name}
-                                            onChange={(e) => setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, name: e.target.value } : item))}
-                                            className="admin-settings-input"
-                                            style={{ width: 180 }}
-                                        />
+                                </li>
+                            ))}
+                        </ul>
+                    </aside>
+
+                    {/* Column 2 – Slides */}
+                    <aside className="admin-col admin-col-slides">
+                        <div className="admin-col-header">
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span>Slides</span>
+
+                            </div>
+                            <div style={{ display: "flex", alignItems: "end", gap: 6 }}>
+                                <button
+                                    className="admin-icon-btn"
+                                    onClick={() => {
+                                        if (!selectedBundle) return;
+                                        router.push(`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}`);
+                                    }}
+                                    title={selectedBundle ? "Create new slide" : "Select a bundle first"}
+                                    disabled={!selectedBundle}
+                                >
+                                    <FilePlus size={14} />
+                                </button>
+                                <button
+                                    className="admin-icon-btn"
+                                    onClick={async () => {
+                                        if (!selectedBundle) return;
+                                        const url = await askPrompt("Website URL (e.g. https://example.com):");
+                                        if (!url) return;
+                                        const titleStr = await askPrompt("Slide title (optional):");
+                                        const title = titleStr ? titleStr.trim() : "";
+                                        const nextSlides = [...(bundleMeta?.slides || []), {
+                                            id: Date.now().toString(),
+                                            type: "website" as const,
+                                            data: url,
+                                            title: title || undefined,
+                                            active: true
+                                        }];
+                                        saveMeta({ slides: nextSlides as BundleSlideEntry[] });
+                                        setSelectedSlide(nextSlides[nextSlides.length - 1].id);
+                                    }}
+                                    title={selectedBundle ? "Add website slide" : "Select a bundle first"}
+                                    disabled={!selectedBundle}
+                                >
+                                    <Globe size={14} />
+                                </button>
+                            </div>
+                        </div>
+                        <ul className="admin-list">
+                            {!selectedBundle && <li className="admin-list-empty">Select a bundle</li>}
+                            {selectedBundle && slides.length === 0 && <li className="admin-list-empty">No slides</li>}
+                            {slides.map((slide) => {
+                                const existingEntry = entryBySlide.get(slide);
+                                const isEnabled = existingEntry?.active !== false;
+                                const isDragging = dragSlide === slide;
+                                const isDragOver = dragOverSlide === slide && dragSlide !== slide;
+                                return (
+                                    <li
+                                        key={slide}
+                                        draggable={true}
+                                        onContextMenu={(e) => {
+                                            e.preventDefault();
+                                            setAdminContextMenu({
+                                                visible: true,
+                                                x: e.clientX,
+                                                y: e.clientY,
+                                                items: [
+                                                    { label: existingEntry?.type === "website" ? "Edit URL" : "Rename File", onClick: () => handleRenameSlide(selectedBundle!, slide) },
+                                                    {
+                                                        label: "Edit Title", onClick: async () => {
+                                                            const newTitle = await askPrompt("Slide Title:", existingEntry?.title || slide);
+                                                            if (newTitle !== null) {
+                                                                const normalized = new Map(orderedEntries.map((e) => [e.id, e]));
+                                                                const next = slides.map(id => id === slide ? { ...(normalized.get(id) ?? { id, type: "fabric" as const, data: id + ".json" }), title: newTitle } : (normalized.get(id) ?? { id, type: "fabric" as const, data: id + ".json" }));
+                                                                saveMeta({ slides: next });
+                                                            }
+                                                        }
+                                                    },
+                                                    { label: "Duplicate Slide", onClick: () => handleDuplicateSlide(selectedBundle!, slide) },
+                                                    { label: "Delete Slide", danger: true, onClick: () => handleDeleteSlide(selectedBundle!, slide) }
+                                                ]
+                                            });
+                                        }}
+                                        onDragStart={(e) => {
+                                            setDragSlide(slide);
+                                            setDragOverSlide(slide);
+                                            e.dataTransfer.effectAllowed = "move";
+                                            e.dataTransfer.setData("text/plain", slide);
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            if (dragOverSlide !== slide) setDragOverSlide(slide);
+                                            e.dataTransfer.dropEffect = "move";
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            const source = dragSlide ?? e.dataTransfer.getData("text/plain");
+                                            if (source) moveSlide(source, slide);
+                                            setDragSlide(null);
+                                            setDragOverSlide(null);
+                                        }}
+                                        onDragEnd={() => {
+                                            setDragSlide(null);
+                                            setDragOverSlide(null);
+                                        }}
+                                    >
+                                        <div className={`admin-list-item admin-list-item-draggable ${selectedSlide === slide ? "selected" : ""} ${isActive(selectedBundle!, slide) ? "playing" : ""} ${isDragging ? "dragging" : ""} ${isDragOver ? "drag-over" : ""}`} title="Drag to reorder">
+                                            <span className="admin-playing-icon-placeholder">
+                                                {isActive(selectedBundle!, slide) ? <Play size={14} className="admin-playing-icon" /> : null}
+                                            </span>
+                                            <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{existingEntry?.title || slide}</span>
+                                            <button
+                                                className={`admin-slide-toggle${isEnabled ? " on" : ""}`}
+                                                title={isEnabled ? "Remove from cycle" : "Add to cycle"}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
+                                                    const next = slides.map((name) => {
+                                                        const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
+                                                        if (name !== slide) return entry;
+                                                        return { ...entry, active: !isEnabled };
+                                                    });
+                                                    saveMeta({ slides: next });
+                                                }}
+                                            >{isEnabled ? "✓" : "–"}</button>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </aside>
+
+                    {/* Column 3 – Preview + details */}
+                    <section className="admin-col admin-col-preview">
+                        <div className="admin-col-header">
+                            <div className="admin-preview-header-row">
+                                <div className="admin-preview-tabs-left">
+                                    <button
+                                        className={`admin-preview-tab ${previewTab === "preview" ? "active" : ""}`}
+                                        onClick={() => setPreviewTab("preview")}
+                                    >Preview</button>
+                                    <button
+                                        className={`admin-preview-tab ${previewTab === "settings" ? "active" : ""}`}
+                                        onClick={() => setPreviewTab("settings")}
+                                        disabled={!selectedBundle}
+                                        title="Bundle settings"
+                                    >
+                                        <Settings size={11} /> Settings
+                                    </button>
+                                    {state.displayConfigs.length > 0 && (
+                                        <button
+                                            className={`admin-preview-tab ${previewTab === "displays" ? "active" : ""}`}
+                                            type="button"
+                                            onClick={() => setPreviewTab("displays")}
+                                            title="Display settings"
+                                        >
+                                            Displays
+                                        </button>
+                                    )}
+                                </div>
+
+                                <button
+                                    className={`admin-preview-tab admin-preview-tab-live-edge ${previewTab === "live" ? "active" : ""} ${selectedDisplayState ? "live" : ""}`}
+                                    onClick={() => setPreviewTab("live")}
+                                >
+                                    {selectedDisplayState && <span className="admin-live-dot" />}Live
+                                </button>
+                            </div>
+                        </div>
+
+                        {previewTab === "settings" ? (
+                            <BundleSettingsPanel
+                                selectedBundle={selectedBundle}
+                                bundleMeta={bundleMeta}
+                                metaDraft={metaDraft}
+                                setMetaDraft={setMetaDraft}
+                                saveMeta={saveMeta}
+                            />
+                        ) : previewTab === "users" ? (
+                            <UserManager />
+                        ) : previewTab === "displays" ? (
+                            <div className="admin-display-config-panel">
+                                <div className="admin-display-config-header">
+                                    <strong>Display configuration</strong>
+                                </div>
+                                {displayDrafts.map((config, index) => (
+                                    <div className="admin-display-config-row" key={config.id}>
+                                        <div className="admin-display-config-field">
+                                            <label className="admin-label">ID</label>
+                                            <input
+                                                value={config.id}
+                                                onChange={(e) => {
+                                                    const nextId = e.target.value.trim();
+                                                    setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, id: nextId || item.id } : item));
+                                                }}
+                                                className="admin-settings-input"
+                                                style={{ width: 100 }}
+                                            />
+                                        </div>
+                                        <div className="admin-display-config-field">
+                                            <label className="admin-label">Name</label>
+                                            <input
+                                                value={config.name}
+                                                onChange={(e) => setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, name: e.target.value } : item))}
+                                                className="admin-settings-input"
+                                                style={{ width: 180 }}
+                                            />
+                                        </div>
+                                        <button
+                                            className="admin-nav-btn"
+                                            type="button"
+                                            onClick={() => setDisplayDrafts((current) => current.filter((_, idx) => idx !== index))}
+                                            disabled={displayDrafts.length <= 1}
+                                            title="Remove display"
+                                        >
+                                            ✕
+                                        </button>
                                     </div>
+                                ))}
+                                <div className="admin-display-config-actions">
                                     <button
                                         className="admin-nav-btn"
                                         type="button"
-                                        onClick={() => setDisplayDrafts((current) => current.filter((_, idx) => idx !== index))}
-                                        disabled={displayDrafts.length <= 1}
-                                        title="Remove display"
+                                        onClick={() => setDisplayDrafts((current) => [
+                                            ...current,
+                                            { id: `display-${current.length + 1}`, name: `Display ${current.length + 1}` },
+                                        ])}
                                     >
-                                        ✕
+                                        Add display
+                                    </button>
+                                    <button
+                                        className="admin-nav-btn"
+                                        type="button"
+                                        onClick={() => {
+                                            updateDisplayConfig(displayDrafts);
+                                            setPreviewTab("preview");
+                                        }}
+                                    >
+                                        Save
+                                    </button>
+                                    <button
+                                        className="admin-nav-btn"
+                                        type="button"
+                                        onClick={() => {
+                                            setDisplayDrafts(state.displayConfigs);
+                                            setPreviewTab("preview");
+                                        }}
+                                    >
+                                        Cancel
                                     </button>
                                 </div>
-                            ))}
-                            <div className="admin-display-config-actions">
-                                <button
-                                    className="admin-nav-btn"
-                                    type="button"
-                                    onClick={() => setDisplayDrafts((current) => [
-                                        ...current,
-                                        { id: `display-${current.length + 1}`, name: `Display ${current.length + 1}` },
-                                    ])}
-                                >
-                                    Add display
-                                </button>
-                                <button
-                                    className="admin-nav-btn"
-                                    type="button"
-                                    onClick={() => {
-                                        updateDisplayConfig(displayDrafts);
-                                        setPreviewTab("preview");
-                                    }}
-                                >
-                                    Save
-                                </button>
-                                <button
-                                    className="admin-nav-btn"
-                                    type="button"
-                                    onClick={() => {
-                                        setDisplayDrafts(state.displayConfigs);
-                                        setPreviewTab("preview");
-                                    }}
-                                >
-                                    Cancel
-                                </button>
                             </div>
-                        </div>
-                    ) : (
-                        <>
-                        <div className="admin-preview-area">
-                            {previewTab === "preview" && loadingPreview && <div className="admin-preview-overlay">Loading…</div>}
-                            {previewTab === "preview" && !selectedSlide && !loadingPreview && (
-                                <div className="admin-preview-overlay">Select a slide to preview</div>
-                            )}
-                            {previewTab === "live" && !selectedDisplayState && (
-                                <div className="admin-preview-overlay">Nothing broadcasting</div>
-                            )}
-                            <DisplaySlide
-                                json={previewTab === "live" ? liveJson : previewJson}
-                                bundleMeta={previewTab === "live" ? liveBundleMeta : bundleMeta}
-                                activeEntry={
-                                    previewTab === "live"
-                                        ? liveBundleMeta?.slides?.find(s => s.id === selectedDisplayState?.slide) ?? null
-                                        : bundleMeta?.slides?.find(s => s.id === selectedSlide) ?? null
-                                }
-                                autoScale={true}
-                                showMissingAssetWarning={true}
-                            />
-                        </div>
+                        ) : (
+                            <>
+                                <div className="admin-preview-area">
+                                    {previewTab === "preview" && loadingPreview && <div className="admin-preview-overlay">Loading…</div>}
+                                    {previewTab === "preview" && !selectedSlide && !loadingPreview && (
+                                        <div className="admin-preview-overlay">Select a slide to preview</div>
+                                    )}
+                                    {previewTab === "live" && !selectedDisplayState && (
+                                        <div className="admin-preview-overlay">Nothing broadcasting</div>
+                                    )}
+                                    <DisplaySlide
+                                        json={previewTab === "live" ? liveJson : previewJson}
+                                        bundleMeta={previewTab === "live" ? liveBundleMeta : bundleMeta}
+                                        activeEntry={
+                                            previewTab === "live"
+                                                ? liveBundleMeta?.slides?.find(s => s.id === selectedDisplayState?.slide) ?? null
+                                                : bundleMeta?.slides?.find(s => s.id === selectedSlide) ?? null
+                                        }
+                                        autoScale={true}
+                                        showMissingAssetWarning={true}
+                                    />
+                                </div>
 
-                        <div className="admin-preview-controls">
-                            <div className="admin-preview-row admin-preview-row-two-col">
-                                <div className="admin-preview-col-left">
-                                    {selectedBundle && selectedSlide && (
-                                        bundleMeta?.slides?.find((s) => s.id === selectedSlide)?.type === "website" ? (
+                                <div className="admin-preview-controls">
+                                    <div className="admin-preview-row admin-preview-row-two-col">
+                                        <div className="admin-preview-col-left">
+                                            {selectedBundle && selectedSlide && (
+                                                bundleMeta?.slides?.find((s) => s.id === selectedSlide)?.type === "website" ? (
+                                                    <button
+                                                        className="admin-nav-btn"
+                                                        onClick={() => handleRenameSlide(selectedBundle, selectedSlide)}
+                                                    >
+                                                        <Pencil size={13} /> Edit URL
+                                                    </button>
+                                                ) : (
+                                                    <Link
+                                                        href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
+                                                        className="admin-nav-btn"
+                                                    >
+                                                        <Pencil size={13} /> Edit slide
+                                                    </Link>
+                                                )
+                                            )}
+                                        </div>
+                                        <div className="admin-preview-col-right">
+                                            <label className="admin-label">Slide duration</label>
+                                            <input
+                                                type="number" min={0} max={3600}
+                                                value={slideDurationDraft}
+                                                onChange={(e) => setSlideDurationDraft(e.target.value)}
+                                                className="toolbar-number-input"
+                                                style={{ width: 64 }}
+                                                title="Selected slide duration override (blank = use global)"
+                                                disabled={!selectedSlide}
+                                            />
+                                            <span className="admin-label">s</span>
                                             <button
                                                 className="admin-nav-btn"
-                                                onClick={() => handleRenameSlide(selectedBundle, selectedSlide)}
-                                            >
-                                                <Pencil size={13} /> Edit URL
-                                            </button>
-                                        ) : (
-                                            <Link
-                                                href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
-                                                className="admin-nav-btn"
-                                            >
-                                                <Pencil size={13} /> Edit slide
-                                            </Link>
-                                        )
-                                    )}
+                                                onClick={handleSaveSlideDuration}
+                                                disabled={!isSlideDurationDirty}
+                                                title="Save selected slide duration"
+                                            >Save</button>
+                                            {selectedSlide && isSlideDurationDirty && (
+                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
+                                            )}
+                                        </div>
+                                    </div>
+
                                 </div>
-                                <div className="admin-preview-col-right">
-                                    <label className="admin-label">Slide duration</label>
-                                    <input
-                                        type="number" min={0} max={3600}
-                                        value={slideDurationDraft}
-                                        onChange={(e) => setSlideDurationDraft(e.target.value)}
-                                        className="toolbar-number-input"
-                                        style={{ width: 64 }}
-                                        title="Selected slide duration override (blank = use global)"
-                                        disabled={!selectedSlide}
-                                    />
-                                    <span className="admin-label">s</span>
-                                    <button
-                                        className="admin-nav-btn"
-                                        onClick={handleSaveSlideDuration}
-                                        disabled={!isSlideDurationDirty}
-                                        title="Save selected slide duration"
-                                    >Save</button>
-                                    {selectedSlide && isSlideDurationDirty && (
-                                        <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
-                                    )}
-                                </div>
+                            </>
+                        )}
+                    </section>
+                </main>
+
+                {/* ── Footer ─────────────────────────────── */}
+                <footer className="admin-footer">
+                    <div className="admin-footer-controls">
+                        <button className="admin-foot-btn" onClick={() => navigate(-1)} disabled={slides.length < 2} title="Previous slide">
+                            <StepBack size={16} />
+                        </button>
+                        <button
+                            className={`admin-foot-btn ${selectedDisplayIsCycling ? "admin-foot-danger" : "admin-foot-primary"}`}
+                            onClick={selectedDisplayIsCycling ? handleStopCycle : handleShowSlide}
+                            disabled={selectedDisplayIsCycling
+                                ? !connected
+                                : !connected || !selectedDisplayBundle || activeBundleSlides.length === 0}
+                            title={selectedDisplayIsCycling ? "Pause cycling" : "Show selected slide"}
+                        >
+                            {state.isCycling ? <Pause size={16} /> : <Play size={16} />}
+                        </button>
+                        <button className="admin-foot-btn" onClick={() => navigate(1)} disabled={slides.length < 2} title="Next slide">
+                            <StepForward size={16} />
+                        </button>
+                        <div className="admin-footer-sep" />
+                        <button className="admin-foot-btn admin-foot-danger" onClick={handleClearSlide} disabled={!selectedDisplayState} title="Blackout">
+                            <CircleOff size={16} />
+                        </button>
+                        <button className="admin-foot-btn" onClick={() => loadBundles()} title="Reload bundles">
+                            <RotateCcw size={15} />
+                        </button>
+                    </div>
+                </footer>
+
+                {confirmActivateBundle !== null && (
+                    <div className="slide-picker-overlay" onClick={() => setConfirmActivateBundle(null)} style={{ zIndex: 10000 }}>
+                        <div className="slide-picker-modal" onClick={(e) => e.stopPropagation()} style={{ width: '400px' }}>
+                            <div className="slide-picker-header">
+                                <span>Confirm Active Bundle</span>
+                                <button className="toolbar-btn toolbar-btn-icon" onClick={() => setConfirmActivateBundle(null)} title="Close">✕</button>
                             </div>
-
-                        </div>
-                        </>
-                    )}
-                </section>
-            </main>
-
-            {/* ── Footer ─────────────────────────────── */}
-            <footer className="admin-footer">
-                <div className="admin-footer-controls">
-                    <button className="admin-foot-btn" onClick={() => navigate(-1)} disabled={slides.length < 2} title="Previous slide">
-                        <StepBack size={16} />
-                    </button>
-                    <button
-                        className={`admin-foot-btn ${selectedDisplayIsCycling ? "admin-foot-danger" : "admin-foot-primary"}`}
-                        onClick={selectedDisplayIsCycling ? handleStopCycle : handleShowSlide}
-                        disabled={selectedDisplayIsCycling
-                            ? !connected
-                            : !connected || !selectedDisplayBundle || activeBundleSlides.length === 0}
-                        title={selectedDisplayIsCycling ? "Pause cycling" : "Show selected slide"}
-                    >
-                        {state.isCycling ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-                    <button className="admin-foot-btn" onClick={() => navigate(1)} disabled={slides.length < 2} title="Next slide">
-                        <StepForward size={16} />
-                    </button>
-                    <div className="admin-footer-sep" />
-                    <button className="admin-foot-btn admin-foot-danger" onClick={handleClearSlide} disabled={!selectedDisplayState} title="Blackout">
-                        <CircleOff size={16} />
-                    </button>
-                    <button className="admin-foot-btn" onClick={() => loadBundles()} title="Reload bundles">
-                        <RotateCcw size={15} />
-                    </button>
-                </div>
-            </footer>
-
-            {confirmActivateBundle !== null && (
-                <div className="slide-picker-overlay" onClick={() => setConfirmActivateBundle(null)} style={{ zIndex: 10000 }}>
-                    <div className="slide-picker-modal" onClick={(e) => e.stopPropagation()} style={{ width: '400px' }}>
-                        <div className="slide-picker-header">
-                            <span>Confirm Active Bundle</span>
-                            <button className="toolbar-btn toolbar-btn-icon" onClick={() => setConfirmActivateBundle(null)} title="Close">✕</button>
-                        </div>
-                        <div className="slide-picker-body" style={{ padding: '20px 10px', textAlign: 'center' }}>
-                            <p style={{ marginBottom: '20px', fontSize: '15px' }}>
-                                Are you sure you want to set &quot;<strong>{confirmActivateBundle}</strong>&quot; as the active bundle?
-                            </p>
-                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                                <button
-                                    className="toolbar-btn"
-                                    onClick={() => setConfirmActivateBundle(null)}
-                                    style={{ padding: '8px 16px' }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    className="toolbar-btn toolbar-btn-primary"
-                                    style={{ padding: '8px 16px', background: '#36f', color: '#fff', border: '1px solid #25e' }}
-                                    onClick={() => {
-                                        if (effectiveSelectedDisplay) activateBundle(confirmActivateBundle, effectiveSelectedDisplay);
-                                        setConfirmActivateBundle(null);
-                                    }}
-                                >
-                                    Set Active Bundle
-                                </button>
+                            <div className="slide-picker-body" style={{ padding: '20px 10px', textAlign: 'center' }}>
+                                <p style={{ marginBottom: '20px', fontSize: '15px' }}>
+                                    Are you sure you want to set &quot;<strong>{confirmActivateBundle}</strong>&quot; as the active bundle?
+                                </p>
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                    <button
+                                        className="toolbar-btn"
+                                        onClick={() => setConfirmActivateBundle(null)}
+                                        style={{ padding: '8px 16px' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="toolbar-btn toolbar-btn-primary"
+                                        style={{ padding: '8px 16px', background: '#36f', color: '#fff', border: '1px solid #25e' }}
+                                        onClick={() => {
+                                            if (effectiveSelectedDisplay) activateBundle(confirmActivateBundle, effectiveSelectedDisplay);
+                                            setConfirmActivateBundle(null);
+                                        }}
+                                    >
+                                        Set Active Bundle
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-        </div>
+            </div>
         </>
     );
 }

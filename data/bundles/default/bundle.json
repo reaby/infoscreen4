@@ -52,5 +52,6 @@
   ],
   "showLocalTime": true,
   "backgroundFile": "waves_bottom.mp4",
-  "localTimePosition": "bottom-right"
+  "localTimePosition": "bottom-right",
+  "defaultDuration": 20
 }
