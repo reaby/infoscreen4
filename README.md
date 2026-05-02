@@ -1,134 +1,123 @@
 # Infoscreen4
 
-Digital signage system built for LAN parties, events, and dynamic displays. Infoscreen4 allows you to manage multiple networked displays from a centralized admin panel in real-time.
+## 1. Introduction
 
-## Features
+Infoscreen4 is a modern digital signage system for LAN parties, event spaces, community hubs, and other multi-screen setups. It combines a fast admin experience with real-time display updates, so you can create and publish content to multiple screens from one place.
 
-- **Real-Time Display Sync**: Push live updates to all connected screens instantly via WebSockets.
-- **Advanced Slide Editor**: Web-based WYSIWYG editor using Fabric.js.
-  - Support for text with customizable Google Fonts.
-  - Image and Video elements.
-  - Shapes, customizable colors, outlines, and dropshadows.
-- **Bundle Management**: Create "Bundles" consisting of multiple slides, and assign different bundles to different physical displays.
-- **Media Manager**: Built-in file management for uploading background images, videos, and generic assets.
-- **Live WebRTC Streaming**: Stream a screen or webcam directly to any display in real-time.
-- **Internal JSON Database**: Simple filesystem-based JSON storage under `/data`. No complex external database setup required.
+The project is built with Next.js, React, Socket.IO, and Fabric.js, with a lightweight JSON-based data layer in the local `data/` directory.
 
-## Getting Started
+## 2. Features
 
-Make sure you have [Node.js](https://nodejs.org/) installed. This project uses `pnpm`, but you can use `npm` or `yarn` as well.
+- Real-time display synchronization over WebSockets.
+- Multi-display control with per-display assignments.
+- Slide bundle management with ordered playback.
+- Visual slide editor powered by Fabric.js.
+- Rich slide content support: text, images, videos, shapes, colors and more.
+- Integrated media management for files under `data/`.
+- Live WebRTC streaming from `/send` to display clients.
+- Optional HTTPS support for secure media capture workflows.
+- No external database required for local/self-hosted usage.
 
-1. Install dependencies:
-   ```bash
-   pnpm install
-   ```
+## 3. Setup Guide For Production
 
-2. Start the development server (runs with `tsx` to support the custom WebSocket server):
-   ```bash
-   pnpm run dev
-   ```
+### Prerequisites
 
-3. Open [http://localhost:3000](http://localhost:3000) with your browser.
-   - Access the main dashboard at `/`
-   - Access the admin panel at `/admin`
-   - Access a specific display endpoint at `/display/[id]`
-   - Open the stream sender at `/send`
+- Node.js 20+ recommended.
+- pnpm 9+ recommended.
 
-## Live WebRTC Streaming
+### Install and Build
 
-Infoscreen4 supports pushing a live screen share or webcam feed to any display using WebRTC. Signaling is handled over the existing Socket.IO connection — no separate media server is required.
+```bash
+pnpm install
+pnpm run build
+```
 
-### How it works
+### Configure Environment
 
-1. A logged-in user opens `/send`, enters a stream name, and clicks **Share Screen** or **Use Camera**.
-2. The stream appears in the admin panel under the **Streams** tab with a live preview thumbnail.
-3. The admin clicks **Show on display** to push the stream to a selected display. The display renders it fullscreen, pausing any running slide cycle.
-4. When the stream stops (or admin clicks **Clear**), the display resumes normal slide playback.
+Create a `.env` file in the project root (or provide environment variables via your process manager):
 
-### HTTPS requirement
+```env
+NODE_ENV=production
+HOST=0.0.0.0
+PORT=3000
+# Optional: absolute project path used for resolving data/
+# INFOSCREEN_ROOT=/absolute/path/to/infoscreen4
+# Optional: absolute path to data directory (overrides INFOSCREEN_ROOT)
+# INFOSCREEN_DATA_DIR=/absolute/path/to/infoscreen4/data
+# Optional HTTPS certificate paths
+# SSL_KEY=/absolute/path/to/key.pem
+# SSL_CERT=/absolute/path/to/cert.pem
+```
 
-Browsers only allow screen capture and camera access in **secure contexts** (HTTPS or `localhost`). Accessing the app over a plain HTTP LAN address will block the `/send` page from capturing media.
+### Start Server
 
-**Generate a self-signed certificate** (requires OpenSSL — included with Git for Windows):
+```bash
+pnpm run start
+```
+
+### Optional: Generate Local Self-Signed Cert
 
 ```bash
 pnpm run gen-cert
 ```
 
-This creates `key.pem` and `cert.pem` in the project root. The server automatically detects these files on startup and switches to HTTPS:
+If `key.pem` and `cert.pem` exist (or `SSL_KEY` / `SSL_CERT` are set), the custom server automatically starts in HTTPS mode.
 
-```
-> Ready on https://0.0.0.0:3000 [dev]
-```
-
-On first visit, browsers will show an "insecure certificate" warning because the cert is self-signed. Click **Advanced → Proceed** once per browser. After that, screen/camera capture works normally on any LAN client.
-
-You can override the default cert paths with environment variables:
-
-```env
-SSL_KEY=/path/to/key.pem
-SSL_CERT=/path/to/cert.pem
-```
-
-If no cert files are found, the server falls back to plain HTTP (fine for `localhost` development).
-
-## Deployment (Production)
-
-Running in production requires building the Next.js frontend, then running the custom `server.ts` entrypoint.
-
-1. Build the optimal production bundle:
-   ```bash
-   pnpm run build
-   ```
-
-2. Run the production server:
-   ```bash
-   pnpm run start
-   ```
-
-## Environment Variables (VPS)
-
-This project reads runtime settings from environment variables (or `.env` when using the script commands).
-
-Copy the example file:
+### Optional: PM2 Example
 
 ```bash
-cp .env.example .env
-```
-
-Variables:
-
-- `HOST` (default `0.0.0.0`): server bind host. Use `0.0.0.0` on VPS.
-- `PORT` (default `3000`): server bind port.
-- `INFOSCREEN_ROOT` (optional): absolute project root used to resolve `data/`.
-- `INFOSCREEN_DATA_DIR` (optional): absolute data directory; overrides `INFOSCREEN_ROOT`.
-
-Example `.env` for VPS:
-
-```env
-HOST=0.0.0.0
-PORT=3000
-INFOSCREEN_ROOT=/home/reaby/infoscreen4
-# INFOSCREEN_DATA_DIR=/home/reaby/infoscreen4/data
-```
-
-### systemd example
-
-```ini
-[Service]
-WorkingDirectory=/home/reaby/infoscreen4
-Environment=NODE_ENV=production
-Environment=HOST=0.0.0.0
-Environment=PORT=3000
-Environment=INFOSCREEN_ROOT=/home/reaby/infoscreen4
-ExecStart=/usr/bin/pnpm run start
-Restart=always
-```
-
-### PM2 example
-
-```bash
-pm2 start "pnpm run start" --name infoscreen4 --cwd /home/reaby/infoscreen4 --update-env
-pm2 set pm2:autodump true
+pm2 start "pnpm run start" --name infoscreen4 --cwd /path/to/infoscreen4 --update-env
 pm2 save
 ```
+
+## 4. Contributing
+
+Contributions are welcome.
+
+If you want to improve Infoscreen4, feel free to open an issue to discuss ideas, report bugs, or propose features. Pull requests are appreciated, especially when they are focused, clearly described, and easy to test.
+
+Please keep changes aligned with the existing coding style and include relevant updates to docs when behavior changes.
+
+## 5. Setup Guide For Development
+
+### Prerequisites
+
+- Node.js 20+ recommended.
+- pnpm 9+ recommended.
+
+### Install Dependencies
+
+```bash
+pnpm install
+```
+
+### Start Development Server
+
+```bash
+pnpm run dev
+```
+
+Open `http://localhost:3000`.
+
+Helpful routes:
+
+- `/` main screen
+- `/admin` admin interface
+- `/display/[displayId]` specific display client
+- `/send` stream sender page
+
+### Development Notes
+
+- The app uses a custom `server.ts` entrypoint (not plain `next dev`).
+- Runtime data is stored under `data/`.
+- For camera/screen capture in browser testing, use `localhost` or HTTPS.
+
+## 6. Thanks
+
+Big thanks to the AI tools that helped accelerate this project:
+
+- Gemini: logo generation and code support.
+- Claude: code support.
+- GitHub LLMs (including Copilot): code support, iteration speed, and overall development flow.
+
+This project became significantly better and faster to build thanks to that collaboration.
