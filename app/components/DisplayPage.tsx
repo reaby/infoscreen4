@@ -30,8 +30,13 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
 
     // WebRTC stream state
     const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
+    const activeStreamRef = useRef<ActiveStream | null>(null);
     const streamVideoRef = useRef<HTMLVideoElement>(null);
     const pcRef = useRef<RTCPeerConnection | null>(null);
+
+    useEffect(() => {
+        activeStreamRef.current = activeStream;
+    }, [activeStream]);
 
     // Slide loading
     useEffect(() => {
@@ -85,14 +90,20 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
         if (!socket) return;
 
         function teardown() {
+            const currentStream = activeStreamRef.current;
+            if (currentStream) {
+                socket?.emit("stream:unwatch", { streamId: currentStream.streamId });
+            }
             pcRef.current?.close();
             pcRef.current = null;
             if (streamVideoRef.current) streamVideoRef.current.srcObject = null;
+            activeStreamRef.current = null;
             setActiveStream(null);
         }
 
         function onStreamIncoming(data: ActiveStream) {
             teardown();
+            activeStreamRef.current = data;
             setActiveStream(data);
 
             const pc = new RTCPeerConnection(PC_CONFIG);
@@ -146,7 +157,7 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
             socket.off("stream:ended", onStreamEnded);
             teardown();
         };
-    }, [connected]); // re-run when socket connects/reconnects
+    }, [connected, socketRef]); // re-run when socket connects/reconnects
 
     return (
         <div className="display-root">

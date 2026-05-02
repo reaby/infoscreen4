@@ -93,7 +93,7 @@ export function useSocket(role: SocketRole, displayId?: string) {
         );
 
         return () => { socket.disconnect(); };
-    }, [role]);
+    }, [role, displayId]);
 
     const showSlide = (displayId: string, slide: ActiveSlide) => {
         socketRef.current?.emit("slide:show", { displayId, ...slide });
@@ -130,7 +130,6 @@ export function useSocket(role: SocketRole, displayId?: string) {
     return {
         connected,
         state,
-        socket: socketRef.current,
         showSlide,
         clearSlide,
         stopCycle,

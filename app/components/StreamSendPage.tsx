@@ -9,6 +9,37 @@ const PC_CONFIG: RTCConfiguration = {
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
 
+type ResolutionOption = {
+    id: string;
+    label: string;
+    width: number;
+    height: number;
+};
+
+const RESOLUTION_OPTIONS: ResolutionOption[] = [
+    { id: "1280x720", label: "720p (1280x720)", width: 1280, height: 720 },
+    { id: "1920x1080", label: "1080p (1920x1080)", width: 1920, height: 1080 },
+    { id: "2560x1440", label: "2k (2560x1440)", width: 2560, height: 1440 },
+    { id: "3840x2160", label: "4k (3840x2160)", width: 3840, height: 2160 },
+];
+
+const FPS_OPTIONS = [15, 30, 60] as const;
+const BITRATE_OPTIONS_KBPS = [1000, 2500, 5000, 10000, 15000] as const;
+
+async function applyVideoBitrate(pc: RTCPeerConnection, targetBitrateKbps: number) {
+    const videoSenders = pc.getSenders().filter((sender) => sender.track?.kind === "video");
+    for (const sender of videoSenders) {
+        try {
+            const params = sender.getParameters();
+            const encodings = params.encodings && params.encodings.length > 0 ? params.encodings : [{}];
+            encodings[0] = { ...encodings[0], maxBitrate: targetBitrateKbps * 1000 };
+            await sender.setParameters({ ...params, encodings });
+        } catch (error) {
+            console.warn("Could not apply target video bitrate", error);
+        }
+    }
+}
+
 function generateId() {
     return Math.random().toString(36).slice(2, 10);
 }
@@ -23,8 +54,21 @@ export default function StreamSendPage() {
     const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
     const [audioEnabled, setAudioEnabled] = useState(false);
     const [audioMuted, setAudioMuted] = useState(false);
+    const [resolutionId, setResolutionId] = useState(RESOLUTION_OPTIONS[1].id);
+    const [targetFps, setTargetFps] = useState<number>(30);
+    const [targetBitrateKbps, setTargetBitrateKbps] = useState<number>(2500);
     const [viewerCount, setViewerCount] = useState(0);
     const [status, setStatus] = useState("");
+
+    function getVideoConstraints(facing?: "user" | "environment"): MediaTrackConstraints {
+        const selectedResolution = RESOLUTION_OPTIONS.find((opt) => opt.id === resolutionId) ?? RESOLUTION_OPTIONS[1];
+        return {
+            width: { ideal: selectedResolution.width },
+            height: { ideal: selectedResolution.height },
+            frameRate: { ideal: targetFps },
+            ...(facing ? { facingMode: { ideal: facing } } : {}),
+        };
+    }
 
     const socketRef = useRef<Socket | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -56,7 +100,7 @@ export default function StreamSendPage() {
         const socket = io({ query: { role: "streamer" }, transports: ["websocket", "polling"] });
         socketRef.current = socket;
 
-        socket.on("stream:viewer:joined", ({ viewerSocketId }: { viewerSocketId: string }) => {
+        socket.on("stream:viewer:joined", async ({ viewerSocketId }: { viewerSocketId: string }) => {
             if (!streamRef.current) return;
             setViewerCount((n) => n + 1);
 
@@ -66,6 +110,8 @@ export default function StreamSendPage() {
             for (const track of streamRef.current.getTracks()) {
                 pc.addTrack(track, streamRef.current);
             }
+
+            await applyVideoBitrate(pc, targetBitrateKbps);
 
             pc.onicecandidate = (e) => {
                 if (e.candidate) {
@@ -97,7 +143,7 @@ export default function StreamSendPage() {
         });
 
         return () => { socket.disconnect(); };
-    }, [authChecked]);
+    }, [authChecked, targetBitrateKbps]);
 
     function attachEndedHandler(media: MediaStream) {
         media.getTracks().forEach((t) => {
@@ -119,8 +165,8 @@ export default function StreamSendPage() {
         try {
             const media =
                 type === "screen"
-                    ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: audioEnabled })
-                    : await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing } }, audio: audioEnabled });
+                    ? await navigator.mediaDevices.getDisplayMedia({ video: getVideoConstraints(), audio: audioEnabled })
+                    : await navigator.mediaDevices.getUserMedia({ video: getVideoConstraints(facing), audio: audioEnabled });
 
             streamRef.current = media;
             attachEndedHandler(media);
@@ -147,7 +193,7 @@ export default function StreamSendPage() {
         flippingRef.current = true;
         try {
             const newStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: nextFacing } },
+                video: getVideoConstraints(nextFacing),
                 audio: audioEnabled,
             });
 
@@ -207,6 +253,51 @@ export default function StreamSendPage() {
                             placeholder="Enter a name for your stream"
                         />
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label className="flex flex-col gap-1 text-sm text-gray-300">
+                            Resolution
+                            <select
+                                value={resolutionId}
+                                onChange={(e) => setResolutionId(e.target.value)}
+                                className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                            >
+                                {RESOLUTION_OPTIONS.map((opt) => (
+                                    <option key={opt.id} value={opt.id}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-gray-300">
+                            FPS
+                            <select
+                                value={targetFps}
+                                onChange={(e) => setTargetFps(Number(e.target.value))}
+                                className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                            >
+                                {FPS_OPTIONS.map((fps) => (
+                                    <option key={fps} value={fps}>
+                                        {fps}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-gray-300">
+                            Target bitrate
+                            <select
+                                value={targetBitrateKbps}
+                                onChange={(e) => setTargetBitrateKbps(Number(e.target.value))}
+                                className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                            >
+                                {BITRATE_OPTIONS_KBPS.map((bitrate) => (
+                                    <option key={bitrate} value={bitrate}>
+                                        {bitrate} kbps
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+                    <p className="text-xs text-gray-400">Target bitrate is best-effort and may vary by browser/network conditions.</p>
                     <div className="flex gap-3">
                         <button
                             className="flex-1 bg-blue-600 hover:bg-blue-500 rounded px-4 py-2 font-medium transition-colors"

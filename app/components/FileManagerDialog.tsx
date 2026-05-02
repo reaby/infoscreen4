@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Upload, Trash2, Pencil, Check, X, FolderOpen } from "lucide-react";
 
 export interface FileManagerProps {
@@ -23,7 +23,7 @@ export default function FileManagerDialog({ basePath, onSelect, onClose }: FileM
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const load = async () => {
+    const load = useCallback(async () => {
         setError(null);
         try {
             const data: string[] = await fetch(basePath).then((r) => r.json());
@@ -31,9 +31,9 @@ export default function FileManagerDialog({ basePath, onSelect, onClose }: FileM
         } catch {
             setError("Failed to load files");
         }
-    };
+    }, [basePath]);
 
-    useEffect(() => { load(); }, [basePath]);
+    useEffect(() => { void load(); }, [load]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

@@ -56,6 +56,7 @@ interface StreamInfo {
 const streams = new Map<string, StreamInfo>();          // streamId → info
 const socketToStream = new Map<string, string>();       // socketId → streamId
 const displayActiveStream = new Map<string, string>();  // displayId → streamId
+const socketToWatchedStream = new Map<string, string>(); // viewerSocketId → streamId
 
 function emitAdminStreams() {
     if (!io) return;
@@ -211,6 +212,11 @@ function startCycle(displayId: string, initial: ActiveSlide) {
 function cleanupStream(streamId: string, streamerSocketId: string) {
     streams.delete(streamId);
     socketToStream.delete(streamerSocketId);
+    for (const [viewerSocketId, watchedStreamId] of socketToWatchedStream.entries()) {
+        if (watchedStreamId === streamId) {
+            socketToWatchedStream.delete(viewerSocketId);
+        }
+    }
     // Notify all displays showing this stream
     for (const [displayId, sid] of displayActiveStream.entries()) {
         if (sid === streamId) {
@@ -252,6 +258,20 @@ app.prepare().then(() => {
 
             if (displayStates[displayId]) {
                 socket.emit("slide:show", enrichSlideData(displayStates[displayId]!));
+            }
+
+            const activeStreamId = displayActiveStream.get(displayId);
+            if (activeStreamId) {
+                const stream = streams.get(activeStreamId);
+                if (stream) {
+                    socket.emit("stream:incoming", {
+                        streamId: stream.streamId,
+                        streamName: stream.name,
+                        streamSocketId: stream.socketId,
+                    });
+                } else {
+                    displayActiveStream.delete(displayId);
+                }
             }
 
             socket.on("disconnect", () => {
@@ -371,11 +391,25 @@ app.prepare().then(() => {
         socket.on("stream:watch", (data: { streamId: string }) => {
             const stream = streams.get(data.streamId);
             if (!stream) return;
+
+            const previousStreamId = socketToWatchedStream.get(socket.id);
+            if (previousStreamId && previousStreamId !== data.streamId) {
+                const previousStream = streams.get(previousStreamId);
+                if (previousStream) {
+                    io?.to(previousStream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
+                }
+            }
+
+            socketToWatchedStream.set(socket.id, data.streamId);
             io?.to(stream.socketId).emit("stream:viewer:joined", { viewerSocketId: socket.id });
         });
 
         socket.on("stream:unwatch", (data: { streamId: string }) => {
             const stream = streams.get(data.streamId);
+            const watchedStreamId = socketToWatchedStream.get(socket.id);
+            if (watchedStreamId === data.streamId) {
+                socketToWatchedStream.delete(socket.id);
+            }
             if (!stream) return;
             io?.to(stream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
         });
@@ -388,8 +422,9 @@ app.prepare().then(() => {
             socket.on("stream:show", (data: { streamId: string; displayId: string }) => {
                 const stream = streams.get(data.streamId);
                 if (!stream) return;
-                displayActiveStream.set(data.displayId, data.streamId);
-                io?.to(displayRoom(data.displayId)).emit("stream:incoming", {
+                const targetId = ensureDisplayId(data.displayId);
+                displayActiveStream.set(targetId, data.streamId);
+                io?.to(displayRoom(targetId)).emit("stream:incoming", {
                     streamId: stream.streamId,
                     streamName: stream.name,
                     streamSocketId: stream.socketId,
@@ -397,10 +432,21 @@ app.prepare().then(() => {
             });
 
             socket.on("stream:clear", (data: { displayId: string }) => {
-                displayActiveStream.delete(data.displayId);
-                io?.to(displayRoom(data.displayId)).emit("stream:cleared");
+                const targetId = ensureDisplayId(data.displayId);
+                displayActiveStream.delete(targetId);
+                io?.to(displayRoom(targetId)).emit("stream:cleared");
             });
         }
+
+        socket.on("disconnect", () => {
+            const watchedStreamId = socketToWatchedStream.get(socket.id);
+            if (!watchedStreamId) return;
+            socketToWatchedStream.delete(socket.id);
+            const stream = streams.get(watchedStreamId);
+            if (stream) {
+                io?.to(stream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
+            }
+        });
     });
 
     httpServer.listen(port, hostname, () => {
