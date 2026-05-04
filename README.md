@@ -2,8 +2,7 @@
 
 ## 1. Introduction
 
-Infoscreen4 is a modern digital signage system for LAN parties, event spaces, community hubs, and other multi-screen setups. It combines a fast admin experience with real-time display updates, so you can create and publish content to multiple screens from one place.
-
+Infoscreen4 for LAN parties. It combines a fast admin experience with real-time display updates, so you can create and publish content to multiple screens from one place.
 The project is built with Next.js, React, Socket.IO, and Fabric.js, with a lightweight JSON-based data layer in the local `data/` directory.
 
 ## 2. Features
@@ -38,15 +37,8 @@ Create a `.env` file in the project root (or provide environment variables via y
 
 ```env
 NODE_ENV=production
-HOST=0.0.0.0
+HOST=<your lan ip>
 PORT=3000
-# Optional: absolute project path used for resolving data/
-# INFOSCREEN_ROOT=/absolute/path/to/infoscreen4
-# Optional: absolute path to data directory (overrides INFOSCREEN_ROOT)
-# INFOSCREEN_DATA_DIR=/absolute/path/to/infoscreen4/data
-# Optional HTTPS certificate paths
-# SSL_KEY=/absolute/path/to/key.pem
-# SSL_CERT=/absolute/path/to/cert.pem
 ```
 
 ### Start Server
