@@ -1,0 +1,10 @@
+node_modules
+.next
+dist
+.git
+.gitignore
+Dockerfile
+README.md
+*.log
+*.pem
+.env

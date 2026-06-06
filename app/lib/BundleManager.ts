@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import type { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
-import { getBundlesDir } from "./paths";
+import { getBundlesDir, getSlidesDir } from "./paths";
 
 type RawMeta = Record<string, unknown>;
 
@@ -24,7 +24,7 @@ export class BundleManager {
     }
 
     getSlideJson(bundle: string, data: string): object | null {
-        const filePath = path.join(this.slidesDir(bundle), this.normalizeJsonFile(data));
+        const filePath = this.slideFilePath(data);
         try {
             return JSON.parse(readFileSync(filePath, "utf8")) as object;
         } catch {
@@ -74,10 +74,10 @@ export class BundleManager {
             }));
     }
 
-    ensureSlideEntry(bundle: string, type: "fabric" | "website", data: string, title?: string): string {
+    ensureSlideEntry(bundle: string, type: "fabric" | "website", data: string, title?: string, id?: string): string {
         const meta = this.getMeta(bundle);
         const slides = [...(meta.slides ?? [])];
-        
+
         let existingId: string | undefined;
         if (type === "fabric") {
             const fileData = this.normalizeJsonFile(data);
@@ -90,20 +90,20 @@ export class BundleManager {
 
         if (existingId) return existingId;
 
-        const id = Date.now().toString();
+        const entryId = id ? id : Date.now().toString();
         const newEntry: BundleSlideEntry = {
-            id,
+            id: entryId,
             type,
             data: type === "fabric" ? this.normalizeJsonFile(data) : data,
-            active: true
+            active: true,
         };
         if (title) {
             newEntry.title = title;
         }
-        
+
         slides.push(newEntry);
         this.writeMeta(bundle, { ...meta, slides });
-        return id;
+        return entryId;
     }
 
     removeSlideEntry(bundle: string, id: string): void {
@@ -116,8 +116,8 @@ export class BundleManager {
         const meta = this.getMeta(bundle);
         const slides = (meta.slides ?? []).map((entry) => {
             if (entry.id === id) {
-                return { 
-                    ...entry, 
+                return {
+                    ...entry,
                     ...(newData ? { data: entry.type === "fabric" ? this.normalizeJsonFile(newData) : newData } : {}),
                     ...(newId ? { id: newId } : {})
                 };
@@ -131,8 +131,12 @@ export class BundleManager {
         return path.join(getBundlesDir(), bundle);
     }
 
-    private slidesDir(bundle: string): string {
-        return path.join(this.bundleDir(bundle), "slides");
+    private slidesDir(): string {
+        return path.join(getSlidesDir());
+    }
+
+    private slideFilePath(data: string): string {
+        return path.join(this.slidesDir(), this.normalizeJsonFile(data));
     }
 
     private metaPath(bundle: string): string {
@@ -143,8 +147,8 @@ export class BundleManager {
         return filename.endsWith(".json") ? filename : `${filename}.json`;
     }
 
-    private listSlideFiles(bundle: string): string[] {
-        const dir = this.slidesDir(bundle);
+    private listGlobalSlideFiles(): string[] {
+        const dir = this.slidesDir();
         if (!existsSync(dir)) return [];
         return readdirSync(dir)
             .filter((file) => file.endsWith(".json"))
@@ -165,25 +169,7 @@ export class BundleManager {
     }
 
     private buildSlidesFromMeta(bundle: string, rawMeta: RawMeta): BundleSlideEntry[] {
-        const allFiles = this.listSlideFiles(bundle);
-        const slidesFromMeta = this.parseSlidesArray(rawMeta.slides);
-        
-        const knownFabricData = new Set(
-            slidesFromMeta
-                .filter((entry) => entry.type === "fabric")
-                .map((entry) => this.normalizeJsonFile(entry.data))
-        );
-
-        const rest = allFiles
-            .filter((file) => !knownFabricData.has(file))
-            .map((file) => ({
-                id: file.slice(0, -5),
-                type: "fabric" as const,
-                data: file,
-                active: true,
-            }));
-
-        return [...slidesFromMeta, ...rest];
+        return this.parseSlidesArray(rawMeta.slides);
     }
 
     private parseSlidesArray(value: unknown): BundleSlideEntry[] {
@@ -193,7 +179,7 @@ export class BundleManager {
 
         for (const candidate of value) {
             if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
-            
+
             const id = (candidate as any).id;
             const type = (candidate as any).type;
             const data = (candidate as any).data;
@@ -202,12 +188,12 @@ export class BundleManager {
             if (typeof id !== "string" || !id) continue;
             if (type !== "fabric" && type !== "website") continue;
             if (typeof data !== "string" || !data) continue;
-            
+
             if (seen.has(id)) continue;
 
             const activeRaw = (candidate as any).active;
             const durationRaw = (candidate as any).duration;
-            
+
             const entry: BundleSlideEntry = {
                 id,
                 type,

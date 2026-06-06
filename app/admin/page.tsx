@@ -6,11 +6,12 @@ import dynamic from "next/dynamic";
 import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, User, ChevronDown, Globe, Radio
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
+import GlobalSlidePickerModal from "../components/GlobalSlidePickerModal";
 import UserManager from "../components/UserManager";
 import AdminContextMenu from "../components/AdminContextMenu";
 import StreamsPanel from "../components/StreamsPanel";
@@ -116,6 +117,7 @@ export default function AdminDashboard() {
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [confirmActivateBundle, setConfirmActivateBundle] = useState<string | null>(null);
     const [displayActiveStreams, setDisplayActiveStreams] = useState<Record<string, string>>({});
+    const [globalSlidePickerOpen, setGlobalSlidePickerOpen] = useState(false);
     const bundleMetaRef = useRef<BundleMeta>({});
     const liveLoadSeqRef = useRef(0);
 
@@ -428,6 +430,31 @@ export default function AdminDashboard() {
         }
     };
 
+    const handleAssignGlobalSlide = useCallback(async (slide: string) => {
+        setGlobalSlidePickerOpen(false);
+        if (!selectedBundle) return;
+
+        const existingIds = new Set((bundleMeta?.slides || []).map((entry) => entry.id));
+        if (existingIds.has(slide)) {
+            setSelectedSlide(slide);
+            return;
+        }
+
+        const nextSlides = [
+            ...(bundleMeta?.slides || []),
+            {
+                id: slide,
+                type: "fabric" as const,
+                data: `${slide}.json`,
+                title: slide,
+                active: true,
+            },
+        ];
+
+        saveMeta({ slides: nextSlides });
+        setSelectedSlide(slide);
+    }, [bundleMeta?.slides, selectedBundle, saveMeta]);
+
     const handleDeleteSlide = async (bundle: string, name: string) => {
         if (!await askConfirm(`Are you sure you want to delete slide '${name}'?`)) return;
         await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`, {
@@ -692,6 +719,12 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     )}
+                    {globalSlidePickerOpen && (
+                        <GlobalSlidePickerModal
+                            onSelect={handleAssignGlobalSlide}
+                            onClose={() => setGlobalSlidePickerOpen(false)}
+                        />
+                    )}
 
                     <AdminContextMenu
                         visible={adminContextMenu.visible}
@@ -772,6 +805,14 @@ export default function AdminDashboard() {
                                     disabled={!selectedBundle}
                                 >
                                     <FilePlus size={14} />
+                                </button>
+                                <button
+                                    className="admin-icon-btn"
+                                    onClick={() => setGlobalSlidePickerOpen(true)}
+                                    title={selectedBundle ? "Assign existing global slide" : "Select a bundle first"}
+                                    disabled={!selectedBundle}
+                                >
+                                    <FolderOpen size={14} />
                                 </button>
                                 <button
                                     className="admin-icon-btn"

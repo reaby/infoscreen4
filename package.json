@@ -7,22 +7,23 @@
     "build": "next build",
     "build:webpack": "next build --webpack",
     "start": "NODE_ENV=production tsx --env-file=.env server.ts",
+    "start-docker": "NODE_ENV=production tsx server.ts",
     "lint": "eslint",
     "gen-cert": "openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj \"/CN=infoscreen\""
   },
   "dependencies": {
-    "fabric": "^7.2.0",
-    "lucide-react": "^1.8.0",
-    "next": "16.2.3",
-    "react": "19.2.4",
-    "react-colorful": "^5.6.1",
-    "react-dom": "19.2.4",
+    "fabric": "7.4.0",
+    "lucide-react": "1.17.0",
+    "next": "16.2.7",
+    "react": "19.2.7",
+    "react-colorful": "5.7.0",
+    "react-dom": "19.2.7",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
@@ -30,6 +31,6 @@
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^6"
   }
 }

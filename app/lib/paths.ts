@@ -21,6 +21,10 @@ export function getBundlesDir(): string {
     return path.join(getDataDir(), "bundles");
 }
 
+export function getSlidesDir(): string {
+    return path.join(getDataDir(), "slides");
+}
+
 export function getImagesDir(): string {
     return path.join(getDataDir(), "images");
 }

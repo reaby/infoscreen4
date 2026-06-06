@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { rename } from "fs/promises";
 import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
-import { getBundlesDir } from "@/app/lib/paths";
+import { getSlidesDir } from "@/app/lib/paths";
 
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 
@@ -23,8 +23,8 @@ export async function POST(req: Request, { params }: Ctx) {
     }
 
     if (entry.type === "fabric") {
-        const oldFile = path.join(getBundlesDir(), bundle, "slides", entry.data);
-        const newFile = path.join(getBundlesDir(), bundle, "slides", bundleManager.normalizeJsonFile(newName));
+        const oldFile = path.join(getSlidesDir(), entry.data);
+        const newFile = path.join(getSlidesDir(), bundleManager.normalizeJsonFile(newName));
 
         try {
             await rename(oldFile, newFile);

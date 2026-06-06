@@ -1,3 +1,7 @@
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+onlyBuiltDependencies:
+  - canvas
+  - esbuild
+
+overrides:
+  postcss@<8.5.10: '>=8.5.10'
+  ws@>=8.0.0 <8.20.1: '>=8.20.1'

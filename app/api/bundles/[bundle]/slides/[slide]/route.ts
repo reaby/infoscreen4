@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { readFile, writeFile, mkdir, unlink } from "fs/promises";
+import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
-import { getBundlesDir } from "@/app/lib/paths";
+import { getBundlesDir, getSlidesDir } from "@/app/lib/paths";
 
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 
@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: Ctx) {
         return NextResponse.json({ error: "Slide is not fabric format" }, { status: 400 });
     }
 
-    const file = path.join(getBundlesDir(), bundle, "slides", entry.data);
+    const file = path.join(getSlidesDir(), entry.data);
     try {
         const content = await readFile(file, "utf8");
         return new NextResponse(content, {
@@ -39,15 +39,15 @@ export async function POST(req: Request, { params }: Ctx) {
     const meta = bundleManager.getMeta(bundle);
     const entry = meta.slides?.find((s) => s.id === id);
 
-    const slidesDir = path.join(getBundlesDir(), bundle, "slides");
+    const slidesDir = getSlidesDir();
     await mkdir(slidesDir, { recursive: true });
 
     const filename = entry && entry.type === "fabric" ? entry.data : `${id}.json`;
     await writeFile(path.join(slidesDir, filename), body, "utf8");
 
-    // Ensure entry exists
+    // Ensure entry exists in this bundle
     if (!entry) {
-        bundleManager.ensureSlideEntry(bundle, "fabric", filename);
+        bundleManager.ensureSlideEntry(bundle, "fabric", filename, undefined, id);
     }
 
     return NextResponse.json({ ok: true });
@@ -55,18 +55,6 @@ export async function POST(req: Request, { params }: Ctx) {
 
 export async function DELETE(_req: Request, { params }: Ctx) {
     const { bundle, slide: id } = await params;
-
-    const meta = bundleManager.getMeta(bundle);
-    const entry = meta.slides?.find((s) => s.id === id);
-
-    if (entry && entry.type === "fabric") {
-        const file = path.join(getBundlesDir(), bundle, "slides", entry.data);
-        try {
-            await unlink(file);
-        } catch {
-            // Ignore missing file
-        }
-    }
 
     bundleManager.removeSlideEntry(bundle, id);
     return NextResponse.json({ ok: true });
