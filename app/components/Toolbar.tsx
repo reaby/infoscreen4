@@ -8,8 +8,11 @@ import type { RgbaColor } from "react-colorful";
 import { AlignLeft, AlignCenter, AlignRight, AlignJustify, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, Crosshair, AlignStartVertical, AlignEndVertical, Undo2, Redo2, Italic, Underline, RectangleHorizontal, Type, ZoomIn, ZoomOut, Maximize2, HelpCircle, Trash2, Save, FolderOpen, FilePlus, ChevronDown, ImageIcon, Film, ArrowLeft, FolderPlus } from "lucide-react";
 import SlidePickerModal from "./SlidePickerModal";
 import FileManagerDialog from "./FileManagerDialog";
+import FontManagerDialog from "./FontManagerDialog";
 import { loadFabricJsonSafely, sanitizeCanvasJson } from "./fabricLoadHelpers";
 import { FabricVideo } from "./FabricVideo";
+import { useFontRegistry } from "../hooks/useFontRegistry";
+import { loadFontsIntoDocument } from "../lib/loadCustomFonts";
 
 interface ToolbarProps {
     canvas: fabric.Canvas | null;
@@ -419,9 +422,15 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
         canvas.requestRenderAll();
     };
 
+    const [fontMgrOpen, setFontMgrOpen] = useState(false);
+    const fontRegistry = useFontRegistry();
+    useEffect(() => {
+        loadFontsIntoDocument(fontRegistry);
+    }, [fontRegistry]);
     const fontFamilies = [
-        // "Arial", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Times New Roman", "Courier New", "Impact", "Comic Sans MS", // Systems
-        "Inter", "Lato", "Montserrat", "Open Sans", "Oswald", "Playfair Display", "Poppins", "Raleway", "Roboto", "Ubuntu"    // Google Fonts
+        ...fontRegistry.builtIn,
+        ...fontRegistry.uploaded.map((f) => f.replace(/\.(woff2?|ttf|otf)$/i, "")),
+        ...fontRegistry.google,
     ];
 
     const handleFontFamily = (family: string) => {
@@ -608,6 +617,7 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
                 <select value={fontFamily} onChange={(e) => handleFontFamily(e.target.value)} className="toolbar-select" disabled={!canvas}>
                     {fontFamilies.map(f => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
                 </select>
+                <button onClick={() => setFontMgrOpen(true)} className="toolbar-btn toolbar-btn-icon" title="Manage fonts"><Type size={15} /></button>
                 <select value={fontWeight} onChange={(e) => handleFontWeight(e.target.value)} className="toolbar-select" disabled={!canvas} title="Font Weight">
                     <option value="100">Thin (100)</option>
                     <option value="200">Extra Light (200)</option>
@@ -662,6 +672,12 @@ export default function Toolbar({ canvas, onZoomIn, onZoomOut, onActualZoom, onR
                 basePath={mediaPickerMode === "image" ? "/api/files/images" : "/api/files/videos"}
                 onSelect={(filename) => { handleMediaSelect(filename).catch(() => {}); }}
                 onClose={() => setMediaPickerMode(null)}
+            />
+        )}
+        {fontMgrOpen && (
+            <FontManagerDialog
+                onChange={fontRegistry.refresh}
+                onClose={() => setFontMgrOpen(false)}
             />
         )}
     </>
