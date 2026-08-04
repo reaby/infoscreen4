@@ -306,6 +306,32 @@ export default function AdminDashboard() {
             .finally(() => setLoadingPreview(false));
     }, [selectedBundle, selectedSlide]);
 
+    // Pushes a slide to the currently selected display immediately (used by both
+    // the "show selected slide" button and the prev/next transport controls).
+    const pushSlideToDisplay = useCallback(async (slideId: string) => {
+        if (!effectiveSelectedDisplay) return;
+        const targetBundle = selectedDisplayState?.bundle ?? selectedBundle;
+        if (!targetBundle) return;
+
+        let baseDuration = DEFAULT_DURATION;
+        if (selectedBundle === targetBundle) {
+            const fromSelected = bundleMeta.defaultDuration;
+            if (typeof fromSelected === "number" && Number.isFinite(fromSelected)) {
+                baseDuration = fromSelected;
+            }
+        } else {
+            const remoteMeta: BundleMeta = await fetch(`/api/bundles/${encodeURIComponent(targetBundle)}`)
+                .then((r) => r.json())
+                .catch(() => ({}));
+            const fromRemote = remoteMeta.defaultDuration;
+            if (typeof fromRemote === "number" && Number.isFinite(fromRemote)) {
+                baseDuration = fromRemote;
+            }
+        }
+
+        showSlide(effectiveSelectedDisplay, { bundle: targetBundle, slide: slideId, duration: baseDuration });
+    }, [effectiveSelectedDisplay, selectedDisplayState, selectedBundle, bundleMeta, showSlide]);
+
     const handleShowSlide = async () => {
         if (!effectiveSelectedDisplay) return;
         const targetBundle = selectedDisplayState?.bundle ?? selectedBundle;
@@ -325,23 +351,7 @@ export default function AdminDashboard() {
             setSelectedSlide(slideToShow);
         }
 
-        let baseDuration = DEFAULT_DURATION;
-        if (selectedBundle === targetBundle) {
-            const fromSelected = bundleMeta.defaultDuration;
-            if (typeof fromSelected === "number" && Number.isFinite(fromSelected)) {
-                baseDuration = fromSelected;
-            }
-        } else {
-            const remoteMeta: BundleMeta = await fetch(`/api/bundles/${encodeURIComponent(targetBundle)}`)
-                .then((r) => r.json())
-                .catch(() => ({}));
-            const fromRemote = remoteMeta.defaultDuration;
-            if (typeof fromRemote === "number" && Number.isFinite(fromRemote)) {
-                baseDuration = fromRemote;
-            }
-        }
-
-        showSlide(effectiveSelectedDisplay, { bundle: targetBundle, slide: slideToShow, duration: baseDuration });
+        await pushSlideToDisplay(slideToShow);
     };
 
     const handleStopCycle = useCallback(() => {
@@ -532,6 +542,14 @@ export default function AdminDashboard() {
     };
 
     const navigate = (dir: 1 | -1) => {
+        if (previewTab === "live") {
+            if (!effectiveSelectedDisplay || activeBundleSlides.length === 0) return;
+            const cur = selectedDisplayState?.slide ? activeBundleSlides.indexOf(selectedDisplayState.slide) : -1;
+            const next = (cur + dir + activeBundleSlides.length) % activeBundleSlides.length;
+            pushSlideToDisplay(activeBundleSlides[next]);
+            return;
+        }
+
         if (!slides.length) return;
         const cur = selectedSlide ? slides.indexOf(selectedSlide) : -1;
         const next = (cur + dir + slides.length) % slides.length;
