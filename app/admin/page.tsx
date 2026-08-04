@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio, Clock
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
@@ -26,6 +26,21 @@ interface BundleInfo {
 const DEFAULT_DURATION = 10;
 
 const normalizeSlideFile = (value: string) => (value.endsWith(".json") ? value : `${value}.json`);
+
+function isoToLocalInputValue(iso?: string): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localInputValueToIso(value: string): string | undefined {
+    if (!value) return undefined;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return d.toISOString();
+}
 
 export default function AdminDashboard() {
     const defer = (fn: () => void) => queueMicrotask(fn);
@@ -114,6 +129,9 @@ export default function AdminDashboard() {
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
     const [slideDurationDraft, setSlideDurationDraft] = useState<string>("");
     const [slideTransitionDraft, setSlideTransitionDraft] = useState<TransitionConfig | null>(null);
+    interface SlideScheduleDraft { mode: "range" | "daily"; start: string; end: string; dailyStart: string; dailyEnd: string }
+    const EMPTY_SCHEDULE_DRAFT: SlideScheduleDraft = { mode: "range", start: "", end: "", dailyStart: "", dailyEnd: "" };
+    const [slideScheduleDraft, setSlideScheduleDraft] = useState<SlideScheduleDraft>(EMPTY_SCHEDULE_DRAFT);
     const [dragSlide, setDragSlide] = useState<string | null>(null);
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
@@ -178,12 +196,23 @@ export default function AdminDashboard() {
         (slideTransitionDraft?.type ?? null) !== (savedSlideTransitionDraft?.type ?? null) ||
         (slideTransitionDraft?.duration ?? null) !== (savedSlideTransitionDraft?.duration ?? null)
     );
+    const savedSlideScheduleDraft = useMemo(() => {
+        const sch = selectedEntry?.schedule;
+        if (sch?.mode === "daily") {
+            return { mode: "daily" as const, start: "", end: "", dailyStart: sch.dailyStart, dailyEnd: sch.dailyEnd };
+        }
+        return { mode: "range" as const, start: isoToLocalInputValue(sch?.start), end: isoToLocalInputValue(sch?.end), dailyStart: "", dailyEnd: "" };
+    }, [selectedEntry]);
+    const isSlideScheduleDirty = selectedSlide !== null &&
+        JSON.stringify(slideScheduleDraft) !== JSON.stringify(savedSlideScheduleDraft);
+
     useEffect(() => {
         defer(() => {
             setSlideDurationDraft(selectedSlide ? savedSlideDurationDraft : "");
             setSlideTransitionDraft(selectedSlide ? savedSlideTransitionDraft : null);
+            setSlideScheduleDraft(selectedSlide ? savedSlideScheduleDraft : EMPTY_SCHEDULE_DRAFT);
         });
-    }, [selectedSlide, savedSlideDurationDraft, savedSlideTransitionDraft]);
+    }, [selectedSlide, savedSlideDurationDraft, savedSlideTransitionDraft, savedSlideScheduleDraft]);
 
     const loadBundles = useCallback(async () => {
         const names: string[] = await fetch("/api/bundles").then((r) => r.json()).catch(() => []);
@@ -627,6 +656,37 @@ export default function AdminDashboard() {
         saveMeta({ slides: nextSlides });
     }, [orderedEntries, saveMeta, selectedSlide, slideTransitionDraft, slides]);
 
+    const handleSaveSlideSchedule = useCallback(() => {
+        if (!selectedSlide) return;
+
+        let schedule: BundleSlideEntry["schedule"];
+        if (slideScheduleDraft.mode === "daily") {
+            if (slideScheduleDraft.dailyStart && slideScheduleDraft.dailyEnd) {
+                schedule = { mode: "daily", dailyStart: slideScheduleDraft.dailyStart, dailyEnd: slideScheduleDraft.dailyEnd };
+            }
+        } else {
+            const start = localInputValueToIso(slideScheduleDraft.start);
+            const end = localInputValueToIso(slideScheduleDraft.end);
+            if (start || end) {
+                schedule = { mode: "range", ...(start ? { start } : {}), ...(end ? { end } : {}) };
+            }
+        }
+
+        const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
+        const nextSlides = slides.map((name) => {
+            const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
+            if (name !== selectedSlide) return entry;
+            if (!schedule) {
+                const rest = { ...entry };
+                delete rest.schedule;
+                return rest;
+            }
+            return { ...entry, schedule };
+        });
+
+        saveMeta({ slides: nextSlides });
+    }, [orderedEntries, saveMeta, selectedSlide, slideScheduleDraft, slides]);
+
     if (!authChecked) {
         return null;
     }
@@ -947,6 +1007,11 @@ export default function AdminDashboard() {
                                                 {isActive(selectedBundle!, slide) ? <Play size={14} className="admin-playing-icon" /> : null}
                                             </span>
                                             <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{existingEntry?.title || slide}</span>
+                                            {existingEntry?.schedule && (
+                                                <span className="admin-label" title="This slide has a scheduled cycling window">
+                                                    <Clock size={12} />
+                                                </span>
+                                            )}
                                             <button
                                                 className={`admin-slide-toggle${isEnabled ? " on" : ""}`}
                                                 title={isEnabled ? "Remove from cycle" : "Add to cycle"}
@@ -1242,6 +1307,74 @@ export default function AdminDashboard() {
                                                 title="Save selected slide transition"
                                             >Save</button>
                                             {selectedSlide && isSlideTransitionDirty && (
+                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
+                                            )}
+                                        </div>
+                                        <div className="admin-preview-col-right">
+                                            <label className="admin-label">Slide schedule</label>
+                                            <select
+                                                value={slideScheduleDraft.mode}
+                                                onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, mode: e.target.value as "range" | "daily" }))}
+                                                className="toolbar-number-input"
+                                                style={{ width: 110 }}
+                                                title="Date range = a one-off window. Daily time = recurring every day."
+                                                disabled={!selectedSlide}
+                                            >
+                                                <option value="range">Date range</option>
+                                                <option value="daily">Daily time</option>
+                                            </select>
+                                            {slideScheduleDraft.mode === "range" ? (
+                                                <>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={slideScheduleDraft.start}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, start: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 190 }}
+                                                        title="Slide becomes eligible for cycling from this date/time (blank = no start restriction)"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                    <span className="admin-label">to</span>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={slideScheduleDraft.end}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, end: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 190 }}
+                                                        title="Slide stops being eligible for cycling after this date/time (blank = no end restriction)"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <input
+                                                        type="time"
+                                                        value={slideScheduleDraft.dailyStart}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, dailyStart: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 90 }}
+                                                        title="Slide cycles in every day from this time"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                    <span className="admin-label">to</span>
+                                                    <input
+                                                        type="time"
+                                                        value={slideScheduleDraft.dailyEnd}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, dailyEnd: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 90 }}
+                                                        title="Slide cycles out every day at this time (earlier than start = wraps past midnight)"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                </>
+                                            )}
+                                            <button
+                                                className="admin-nav-btn"
+                                                onClick={handleSaveSlideSchedule}
+                                                disabled={!isSlideScheduleDirty}
+                                                title="Save selected slide schedule"
+                                            >Save</button>
+                                            {selectedSlide && isSlideScheduleDirty && (
                                                 <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
                                             )}
                                         </div>

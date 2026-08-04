@@ -1,4 +1,5 @@
 import { TransitionConfig } from "../lib/transitions";
+import { SlideSchedule } from "../lib/schedule";
 
 export interface BundleSlideEntry {
     id: string;            // unique identifier (e.g. timestamp or file slug)
@@ -8,6 +9,7 @@ export interface BundleSlideEntry {
     active?: boolean;      // defaults to true
     duration?: number;     // optional per-slide override (seconds)
     transition?: TransitionConfig; // optional per-slide transition override
+    schedule?: SlideSchedule; // optional date/time window during which this slide cycles in
 }
 
 export interface BundleMeta {

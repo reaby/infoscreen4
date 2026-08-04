@@ -3,6 +3,7 @@ import path from "path";
 import type { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import { getBundlesDir, getSlidesDir } from "./paths";
 import { TRANSITION_TYPES, TransitionConfig } from "./transitions";
+import { SlideSchedule, isSlideScheduledNow, isValidTimeOfDay } from "./schedule";
 
 const VALID_TRANSITION_TYPES = new Set(TRANSITION_TYPES.map((t) => t.value));
 
@@ -13,6 +14,29 @@ function parseTransition(value: unknown): TransitionConfig | undefined {
     if (typeof type !== "string" || !VALID_TRANSITION_TYPES.has(type as TransitionConfig["type"])) return undefined;
     if (typeof duration !== "number" || !Number.isFinite(duration) || duration < 0) return undefined;
     return { type: type as TransitionConfig["type"], duration };
+}
+
+function isValidIsoDate(value: unknown): value is string {
+    return typeof value === "string" && value !== "" && !Number.isNaN(new Date(value).getTime());
+}
+
+function parseSchedule(value: unknown): SlideSchedule | undefined {
+    if (!value || typeof value !== "object") return undefined;
+    const mode = (value as any).mode;
+
+    if (mode === "daily") {
+        const dailyStart = (value as any).dailyStart;
+        const dailyEnd = (value as any).dailyEnd;
+        if (!isValidTimeOfDay(dailyStart) || !isValidTimeOfDay(dailyEnd)) return undefined;
+        return { mode: "daily", dailyStart, dailyEnd };
+    }
+
+    const startRaw = (value as any).start;
+    const endRaw = (value as any).end;
+    const start = isValidIsoDate(startRaw) ? startRaw : undefined;
+    const end = isValidIsoDate(endRaw) ? endRaw : undefined;
+    if (!start && !end) return undefined;
+    return { mode: "range", ...(start ? { start } : {}), ...(end ? { end } : {}) };
 }
 
 type RawMeta = Record<string, unknown>;
@@ -70,16 +94,18 @@ export class BundleManager {
     getOrderedSlideNames(bundle: string, options?: { activeOnly?: boolean }): string[] {
         const slides = this.getMeta(bundle).slides ?? [];
         const activeOnly = options?.activeOnly ?? false;
+        const now = new Date();
         return slides
-            .filter((entry) => !activeOnly || entry.active !== false)
+            .filter((entry) => !activeOnly || (entry.active !== false && isSlideScheduledNow(entry.schedule, now)))
             .map((entry) => entry.id);
     }
 
     getOrderedSlides(bundle: string, options?: { activeOnly?: boolean }): OrderedSlide[] {
         const slides = this.getMeta(bundle).slides ?? [];
         const activeOnly = options?.activeOnly ?? false;
+        const now = new Date();
         return slides
-            .filter((entry) => !activeOnly || entry.active !== false)
+            .filter((entry) => !activeOnly || (entry.active !== false && isSlideScheduledNow(entry.schedule, now)))
             .map((entry) => ({
                 id: entry.id,
                 duration: entry.duration,
@@ -219,6 +245,10 @@ export class BundleManager {
             const transition = parseTransition((candidate as any).transition);
             if (transition) {
                 entry.transition = transition;
+            }
+            const schedule = parseSchedule((candidate as any).schedule);
+            if (schedule) {
+                entry.schedule = schedule;
             }
 
             result.push(entry);
