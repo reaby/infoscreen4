@@ -53,5 +53,9 @@
   "showLocalTime": true,
   "backgroundFile": "waves_bottom.mp4",
   "localTimePosition": "bottom-right",
-  "defaultDuration": 20
+  "defaultDuration": 20,
+  "defaultTransition": {
+    "type": "fade",
+    "duration": 600
+  }
 }

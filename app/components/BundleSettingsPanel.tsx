@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { BundleMeta } from "../interfaces/BundleMeta";
 import FileManagerDialog from "./FileManagerDialog";
+import { TRANSITION_TYPES, DEFAULT_TRANSITION } from "../lib/transitions";
 
 const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
 
@@ -86,6 +87,46 @@ export default function BundleSettingsPanel({ selectedBundle, bundleMeta, metaDr
                             />
                             <span className="admin-label">s (≤0 = manual)</span>
                         </div>
+                    </div>
+
+                    <div className="admin-settings-group" style={{ marginTop: 8 }}>
+                        <label className="admin-settings-label">Default transition</label>
+                        <div className="admin-settings-row">
+                            <select
+                                className="admin-settings-input"
+                                style={{ width: 140 }}
+                                value={metaDraft.defaultTransition?.type ?? DEFAULT_TRANSITION.type}
+                                onChange={(e) => setMetaDraft((d) => ({
+                                    ...d,
+                                    defaultTransition: {
+                                        type: e.target.value as typeof DEFAULT_TRANSITION.type,
+                                        duration: d.defaultTransition?.duration ?? DEFAULT_TRANSITION.duration,
+                                    },
+                                }))}
+                            >
+                                {TRANSITION_TYPES.map((t) => (
+                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                ))}
+                            </select>
+                            <input
+                                type="number" min={0} max={5000}
+                                className="admin-settings-input"
+                                style={{ width: 90 }}
+                                value={metaDraft.defaultTransition?.duration ?? DEFAULT_TRANSITION.duration}
+                                onChange={(e) => {
+                                    const value = Number(e.target.value);
+                                    setMetaDraft((d) => ({
+                                        ...d,
+                                        defaultTransition: {
+                                            type: d.defaultTransition?.type ?? DEFAULT_TRANSITION.type,
+                                            duration: Number.isFinite(value) ? value : DEFAULT_TRANSITION.duration,
+                                        },
+                                    }));
+                                }}
+                            />
+                            <span className="admin-label">ms</span>
+                        </div>
+                        <p className="admin-settings-hint">Applied between slides on the display output. Individual slides can override this.</p>
                     </div>
 
                         <div className="admin-settings-group" style={{ marginTop: 8 }}>

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSocket } from "../hooks/useSocket";
 import { BundleMeta } from "../interfaces/BundleMeta";
+import { DEFAULT_TRANSITION } from "../lib/transitions";
+import SlideTransition from "./SlideTransition";
 
 const DisplaySlide = dynamic(() => import("./DisplaySlide"), { ssr: false });
 
@@ -166,11 +168,16 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
                     <span className="display-standby-text">Standby</span>
                 </div>
             )}
-            <DisplaySlide
-                json={displayJson}
-                bundleMeta={bundleMeta}
-                activeEntry={bundleMeta.slides?.find(s => s.id === state.activeSlide?.slide) ?? null}
-            />
+            <SlideTransition
+                transitionKey={state.activeSlide ? `${state.activeSlide.bundle}:${state.activeSlide.slide}` : "__standby__"}
+                transition={state.activeSlide?.transition ?? DEFAULT_TRANSITION}
+            >
+                <DisplaySlide
+                    json={displayJson}
+                    bundleMeta={bundleMeta}
+                    activeEntry={bundleMeta.slides?.find(s => s.id === state.activeSlide?.slide) ?? null}
+                />
+            </SlideTransition>
             {activeStream && (
                 <div className="absolute inset-0 z-50 bg-black flex items-center justify-center">
                     <video

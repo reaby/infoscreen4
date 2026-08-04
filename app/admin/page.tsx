@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
+import { TRANSITION_TYPES, TransitionConfig } from "../lib/transitions";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
 import GlobalSlidePickerModal from "../components/GlobalSlidePickerModal";
 import UserManager from "../components/UserManager";
@@ -112,6 +113,7 @@ export default function AdminDashboard() {
     const [liveBundleMeta, setLiveBundleMeta] = useState<BundleMeta>({});
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
     const [slideDurationDraft, setSlideDurationDraft] = useState<string>("");
+    const [slideTransitionDraft, setSlideTransitionDraft] = useState<TransitionConfig | null>(null);
     const [dragSlide, setDragSlide] = useState<string | null>(null);
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
@@ -169,12 +171,19 @@ export default function AdminDashboard() {
         typeof selectedEntry?.duration === "number" ? String(selectedEntry.duration) : ""
     ), [selectedEntry]);
     const isSlideDurationDirty = selectedSlide !== null && slideDurationDraft !== savedSlideDurationDraft;
-
+    const savedSlideTransitionDraft = useMemo(() => (
+        selectedEntry?.transition ?? null
+    ), [selectedEntry]);
+    const isSlideTransitionDirty = selectedSlide !== null && (
+        (slideTransitionDraft?.type ?? null) !== (savedSlideTransitionDraft?.type ?? null) ||
+        (slideTransitionDraft?.duration ?? null) !== (savedSlideTransitionDraft?.duration ?? null)
+    );
     useEffect(() => {
         defer(() => {
             setSlideDurationDraft(selectedSlide ? savedSlideDurationDraft : "");
+            setSlideTransitionDraft(selectedSlide ? savedSlideTransitionDraft : null);
         });
-    }, [selectedSlide, savedSlideDurationDraft]);
+    }, [selectedSlide, savedSlideDurationDraft, savedSlideTransitionDraft]);
 
     const loadBundles = useCallback(async () => {
         const names: string[] = await fetch("/api/bundles").then((r) => r.json()).catch(() => []);
@@ -581,6 +590,24 @@ export default function AdminDashboard() {
 
         saveMeta({ slides: nextSlides });
     }, [orderedEntries, saveMeta, selectedSlide, slideDurationDraft, slides]);
+
+    const handleSaveSlideTransition = useCallback(() => {
+        if (!selectedSlide) return;
+
+        const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
+        const nextSlides = slides.map((name) => {
+            const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
+            if (name !== selectedSlide) return entry;
+            if (!slideTransitionDraft) {
+                const rest = { ...entry };
+                delete rest.transition;
+                return rest;
+            }
+            return { ...entry, transition: slideTransitionDraft };
+        });
+
+        saveMeta({ slides: nextSlides });
+    }, [orderedEntries, saveMeta, selectedSlide, slideTransitionDraft, slides]);
 
     if (!authChecked) {
         return null;
@@ -1146,6 +1173,57 @@ export default function AdminDashboard() {
                                                 title="Save selected slide duration"
                                             >Save</button>
                                             {selectedSlide && isSlideDurationDirty && (
+                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
+                                            )}
+                                        </div>
+                                        <div className="admin-preview-col-right">
+                                            <label className="admin-label">Slide transition</label>
+                                            <select
+                                                value={slideTransitionDraft?.type ?? ""}
+                                                onChange={(e) => {
+                                                    const type = e.target.value;
+                                                    if (type === "") { setSlideTransitionDraft(null); return; }
+                                                    setSlideTransitionDraft({
+                                                        type: type as TransitionConfig["type"],
+                                                        duration: slideTransitionDraft?.duration ?? 600,
+                                                    });
+                                                }}
+                                                className="toolbar-number-input"
+                                                style={{ width: 130 }}
+                                                title="Selected slide transition override (blank = use bundle default)"
+                                                disabled={!selectedSlide}
+                                            >
+                                                <option value="">Use bundle default</option>
+                                                {TRANSITION_TYPES.map((t) => (
+                                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                                ))}
+                                            </select>
+                                            {slideTransitionDraft && (
+                                                <>
+                                                    <input
+                                                        type="number" min={0} max={5000}
+                                                        value={slideTransitionDraft.duration}
+                                                        onChange={(e) => {
+                                                            const value = Number(e.target.value);
+                                                            setSlideTransitionDraft((prev) => prev && ({
+                                                                ...prev,
+                                                                duration: Number.isFinite(value) ? value : prev.duration,
+                                                            }));
+                                                        }}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 64 }}
+                                                        title="Transition duration"
+                                                    />
+                                                    <span className="admin-label">ms</span>
+                                                </>
+                                            )}
+                                            <button
+                                                className="admin-nav-btn"
+                                                onClick={handleSaveSlideTransition}
+                                                disabled={!isSlideTransitionDirty}
+                                                title="Save selected slide transition"
+                                            >Save</button>
+                                            {selectedSlide && isSlideTransitionDirty && (
                                                 <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
                                             )}
                                         </div>

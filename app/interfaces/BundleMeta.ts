@@ -1,3 +1,5 @@
+import { TransitionConfig } from "../lib/transitions";
+
 export interface BundleSlideEntry {
     id: string;            // unique identifier (e.g. timestamp or file slug)
     type: "fabric" | "website";
@@ -5,6 +7,7 @@ export interface BundleSlideEntry {
     title?: string;        // display name
     active?: boolean;      // defaults to true
     duration?: number;     // optional per-slide override (seconds)
+    transition?: TransitionConfig; // optional per-slide transition override
 }
 
 export interface BundleMeta {
@@ -16,5 +19,6 @@ export interface BundleMeta {
     showLocalTime?: boolean;  // show optional local time
     localTimePosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
     defaultDuration?: number; // default slide duration in seconds (<=0 = manual)
+    defaultTransition?: TransitionConfig; // default transition applied between slides
     slides?: BundleSlideEntry[]; // ordered slide definitions used for cycling/order
 }

@@ -2,6 +2,18 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from "path";
 import type { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import { getBundlesDir, getSlidesDir } from "./paths";
+import { TRANSITION_TYPES, TransitionConfig } from "./transitions";
+
+const VALID_TRANSITION_TYPES = new Set(TRANSITION_TYPES.map((t) => t.value));
+
+function parseTransition(value: unknown): TransitionConfig | undefined {
+    if (!value || typeof value !== "object") return undefined;
+    const type = (value as any).type;
+    const duration = (value as any).duration;
+    if (typeof type !== "string" || !VALID_TRANSITION_TYPES.has(type as TransitionConfig["type"])) return undefined;
+    if (typeof duration !== "number" || !Number.isFinite(duration) || duration < 0) return undefined;
+    return { type: type as TransitionConfig["type"], duration };
+}
 
 type RawMeta = Record<string, unknown>;
 
@@ -203,6 +215,10 @@ export class BundleManager {
             };
             if (typeof durationRaw === "number" && Number.isFinite(durationRaw) && durationRaw >= 0) {
                 entry.duration = durationRaw;
+            }
+            const transition = parseTransition((candidate as any).transition);
+            if (transition) {
+                entry.transition = transition;
             }
 
             result.push(entry);
