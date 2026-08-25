@@ -31,6 +31,7 @@ interface ServerState {
     displayConnections: Record<string, number>;
     displayCycling: Record<string, boolean>;
     displayQueuedNext: Record<string, string | null>;
+    displayAnnouncements: Record<string, { line1: string; line2: string; color: string } | null>;
     streams: StreamInfo[];
 }
 
@@ -49,6 +50,14 @@ const displayCycleIndex: Record<string, number> = {};
 const displayCycleBaseDuration: Record<string, number> = {};
 const displayQueuedNext: Record<string, string | null> = {};
 let io: SocketIOServer | null = null;
+
+// Lower-third announcements
+interface DisplayAnnouncement {
+    line1: string;
+    line2: string;
+    color: string;
+}
+const displayAnnouncements: Record<string, DisplayAnnouncement | null> = {};
 
 // WebRTC streaming state
 interface StreamInfo {
@@ -78,6 +87,7 @@ function getServerState(): ServerState {
             Object.entries(displayCycleTimers).map(([displayId, timer]) => [displayId, timer !== null])
         ),
         displayQueuedNext: { ...displayQueuedNext },
+        displayAnnouncements: { ...displayAnnouncements },
         streams: [...streams.values()],
     };
 }
@@ -138,6 +148,9 @@ function normalizeDisplayKeys() {
             delete displayCycleBaseDuration[key];
             delete displayQueuedNext[key];
         }
+    }
+    for (const key of Object.keys(displayAnnouncements)) {
+        if (!validIds.has(key)) delete displayAnnouncements[key];
     }
     for (const conf of displayConfigs) {
         if (!(conf.id in displayStates)) displayStates[conf.id] = null;
@@ -294,6 +307,11 @@ app.prepare().then(() => {
                 }
             }
 
+            const announcement = displayAnnouncements[displayId];
+            if (announcement) {
+                socket.emit("announce:show", announcement);
+            }
+
             socket.on("disconnect", () => {
                 displayConnections[displayId] = Math.max(0, (displayConnections[displayId] ?? 1) - 1);
                 connectedDisplays = Math.max(0, connectedDisplays - 1);
@@ -336,6 +354,39 @@ app.prepare().then(() => {
             socket.on("cycle:queueNext", (data: { displayId: string; slideId: string | null }) => {
                 const targetId = ensureDisplayId(data.displayId);
                 displayQueuedNext[targetId] = data.slideId ?? null;
+                emitAdminState();
+            });
+
+            socket.on("announce:show", (data: { displayId: string; line1: string; line2: string; color: string }) => {
+                const targetId = ensureDisplayId(data.displayId);
+                const payload: DisplayAnnouncement = {
+                    line1: data.line1 ?? "",
+                    line2: data.line2 ?? "",
+                    color: data.color || "#d32f2f",
+                };
+                displayAnnouncements[targetId] = payload;
+                io?.to(displayRoom(targetId)).emit("announce:show", payload);
+                emitAdminState();
+            });
+
+            socket.on("announce:showAll", (data: { line1: string; line2: string; color: string }) => {
+                const payload: DisplayAnnouncement = {
+                    line1: data.line1 ?? "",
+                    line2: data.line2 ?? "",
+                    color: data.color || "#d32f2f",
+                };
+                for (const conf of displayConfigs) {
+                    displayAnnouncements[conf.id] = payload;
+                }
+                io?.to("displays").emit("announce:show", payload);
+                emitAdminState();
+            });
+
+            socket.on("announce:clearAll", () => {
+                for (const conf of displayConfigs) {
+                    displayAnnouncements[conf.id] = null;
+                }
+                io?.to("displays").emit("announce:clear");
                 emitAdminState();
             });
 

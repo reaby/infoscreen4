@@ -19,6 +19,12 @@ interface ActiveStream {
     streamSocketId: string;
 }
 
+interface Announcement {
+    line1: string;
+    line2: string;
+    color: string;
+}
+
 interface DisplayPageProps {
     displayId?: string;
 }
@@ -35,6 +41,9 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
     const activeStreamRef = useRef<ActiveStream | null>(null);
     const streamVideoRef = useRef<HTMLVideoElement>(null);
     const pcRef = useRef<RTCPeerConnection | null>(null);
+
+    // Lower-third announcement overlay
+    const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
     useEffect(() => {
         activeStreamRef.current = activeStream;
@@ -161,6 +170,23 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
         };
     }, [connected, socketRef]); // re-run when socket connects/reconnects
 
+    // Lower-third announcement handling
+    useEffect(() => {
+        const socket = socketRef.current;
+        if (!socket) return;
+
+        const onAnnounceShow = (data: Announcement) => setAnnouncement(data);
+        const onAnnounceClear = () => setAnnouncement(null);
+
+        socket.on("announce:show", onAnnounceShow);
+        socket.on("announce:clear", onAnnounceClear);
+
+        return () => {
+            socket.off("announce:show", onAnnounceShow);
+            socket.off("announce:clear", onAnnounceClear);
+        };
+    }, [connected, socketRef]);
+
     return (
         <div className="display-root">
             {!state.activeSlide && !activeStream && (
@@ -176,6 +202,7 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
                     json={displayJson}
                     bundleMeta={bundleMeta}
                     activeEntry={bundleMeta.slides?.find(s => s.id === state.activeSlide?.slide) ?? null}
+                    announcementActive={!!announcement && (!!announcement.line1 || !!announcement.line2)}
                 />
             </SlideTransition>
             {activeStream && (
@@ -186,6 +213,12 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
                         playsInline
                         className="w-full h-full object-contain"
                     />
+                </div>
+            )}
+            {announcement && (announcement.line1 || announcement.line2) && (
+                <div className="lower-third" style={{ background: announcement.color }}>
+                    {announcement.line1 && <div className="lower-third-line">{announcement.line1}</div>}
+                    {announcement.line2 && <div className="lower-third-line">{announcement.line2}</div>}
                 </div>
             )}
         </div>

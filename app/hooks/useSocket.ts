@@ -31,6 +31,12 @@ export interface StreamInfo {
     socketId: string;
 }
 
+export interface DisplayAnnouncement {
+    line1: string;
+    line2: string;
+    color: string;
+}
+
 export interface ServerState {
     activeSlide: ActiveSlide | null;
     connectedDisplays: number;
@@ -40,6 +46,7 @@ export interface ServerState {
     displayConnections: Record<string, number>;
     displayCycling: Record<string, boolean>;
     displayQueuedNext: Record<string, string | null>;
+    displayAnnouncements: Record<string, DisplayAnnouncement | null>;
     streams: StreamInfo[];
 }
 
@@ -55,6 +62,7 @@ export function useSocket(role: SocketRole, displayId?: string) {
         displayConnections: {},
         displayCycling: {},
         displayQueuedNext: {},
+        displayAnnouncements: {},
         streams: [],
     });
     const [bundleMetaUpdate, setBundleMetaUpdate] = useState<BundleMetaUpdate | null>(null);
@@ -135,6 +143,18 @@ export function useSocket(role: SocketRole, displayId?: string) {
         socketRef.current?.emit("stream:clear", { displayId });
     };
 
+    const showAnnouncement = (displayId: string, line1: string, line2: string, color: string) => {
+        socketRef.current?.emit("announce:show", { displayId, line1, line2, color });
+    };
+
+    const showAnnouncementAll = (line1: string, line2: string, color: string) => {
+        socketRef.current?.emit("announce:showAll", { line1, line2, color });
+    };
+
+    const clearAnnouncementAll = () => {
+        socketRef.current?.emit("announce:clearAll");
+    };
+
     return {
         connected,
         state,
@@ -148,6 +168,9 @@ export function useSocket(role: SocketRole, displayId?: string) {
         bundleMetaUpdate,
         showStream,
         clearStream,
+        showAnnouncement,
+        showAnnouncementAll,
+        clearAnnouncementAll,
         socketRef,
     };
 }

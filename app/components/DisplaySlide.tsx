@@ -15,6 +15,7 @@ interface Props {
     autoScale?: boolean;      // overrides bundleMeta.autoScale (e.g. admin preview always scales)
     showMissingAssetWarning?: boolean;
     activeEntry?: BundleSlideEntry | null;
+    announcementActive?: boolean; // a lower-third announcement is currently showing over this slide
 }
 
 const DEFAULT_W = 1920;
@@ -25,7 +26,7 @@ function isVideo(name: string) {
     return VIDEO_EXTS.has(name.split(".").pop()?.toLowerCase() ?? "");
 }
 
-export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOverride, showMissingAssetWarning = false, activeEntry }: Props) {
+export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOverride, showMissingAssetWarning = false, activeEntry, announcementActive = false }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasWrapRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -169,6 +170,7 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
         >
             {bundleMeta?.showLocalTime && (() => {
                 const pos = bundleMeta.localTimePosition || "bottom-right";
+                if (announcementActive && pos.includes("bottom")) return null; // avoid clipping with the lower-third
                 return (
                     <div
                         style={{

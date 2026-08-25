@@ -1087,6 +1087,17 @@ canvas {
     border-color: var(--tb-accent-border);
 }
 
+.admin-nav-btn.announce-active {
+    background: #d32f2f;
+    border-color: #d32f2f;
+    color: #fff;
+}
+
+.admin-nav-btn.announce-active:hover {
+    background: #b71c1c;
+    border-color: #b71c1c;
+}
+
 /* ── Main 3-column area ─────────────────── */
 .admin-main {
     display: flex;
@@ -1444,6 +1455,11 @@ canvas {
     display: flex;
     align-items: center;
     justify-content: center;
+    container-type: inline-size;
+}
+
+.admin-preview-lower-third .lower-third-line {
+    font-size: clamp(9px, 3cqw, 26px);
 }
 
 .admin-preview-overlay {
@@ -2244,6 +2260,29 @@ canvas {
 .display-root .slide-preview-container {
     width: 100%;
     height: 100%;
+}
+
+.lower-third {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8%;
+    z-index: 60;
+    padding: 12px 5%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+.lower-third-line {
+    color: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 900;
+    font-size: clamp(20px, 3vw, 42px);
+    line-height: 1.2;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+    word-break: break-word;
 }
 
 .editor-scrollbar-horizontal {

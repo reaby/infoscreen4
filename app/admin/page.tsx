@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio, Clock, Video, SkipForward
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio, Clock, Video, SkipForward, Megaphone
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
@@ -18,6 +18,7 @@ import UserManager from "../components/UserManager";
 import AdminContextMenu from "../components/AdminContextMenu";
 import StreamsPanel from "../components/StreamsPanel";
 import FileManagerDialog from "../components/FileManagerDialog";
+import AnnouncementDialog from "../components/AnnouncementDialog";
 const DisplaySlide = dynamic(() => import("../components/DisplaySlide"), { ssr: false });
 
 interface BundleInfo {
@@ -67,7 +68,7 @@ export default function AdminDashboard() {
     const [currentUser, setCurrentUser] = useState<string | null>(null);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement | null>(null);
-    const { connected, state, showSlide, clearSlide, stopCycle, queueNextSlide, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate, showStream, clearStream, socketRef } = useSocket("admin");
+    const { connected, state, showSlide, clearSlide, stopCycle, queueNextSlide, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate, showStream, clearStream, showAnnouncement, showAnnouncementAll, clearAnnouncementAll, socketRef } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState<string | null>(null);
     const [displayDrafts, setDisplayDrafts] = useState<DisplayConfig[]>([]);
@@ -143,6 +144,7 @@ export default function AdminDashboard() {
     const [globalSlidePickerOpen, setGlobalSlidePickerOpen] = useState(false);
     // null = closed; "new" = adding a new video slide; a slide id = replacing that slide's video
     const [videoSlidePicker, setVideoSlidePicker] = useState<string | null>(null);
+    const [announcementDialogOpen, setAnnouncementDialogOpen] = useState(false);
     const bundleMetaRef = useRef<BundleMeta>({});
     const liveLoadSeqRef = useRef(0);
 
@@ -164,6 +166,16 @@ export default function AdminDashboard() {
     const selectedDisplayState = useMemo(
         () => effectiveSelectedDisplay ? state.displayStates?.[effectiveSelectedDisplay] ?? null : null,
         [effectiveSelectedDisplay, state.displayStates]
+    );
+
+    const selectedDisplayAnnouncement = useMemo(
+        () => effectiveSelectedDisplay ? state.displayAnnouncements?.[effectiveSelectedDisplay] ?? null : null,
+        [effectiveSelectedDisplay, state.displayAnnouncements]
+    );
+
+    const hasActiveAnnouncement = useMemo(
+        () => Object.values(state.displayAnnouncements ?? {}).some(Boolean),
+        [state.displayAnnouncements]
     );
 
     const selectedDisplayConfig = useMemo(
@@ -408,10 +420,11 @@ export default function AdminDashboard() {
         stopCycle(effectiveSelectedDisplay);
     }, [effectiveSelectedDisplay, stopCycle]);
 
-    const handleClearSlide = useCallback(() => {
+    const handleClearSlide = async () => {
         if (!effectiveSelectedDisplay) return;
+        if (!await askConfirm("Blackout the selected display?")) return;
         clearSlide(effectiveSelectedDisplay);
-    }, [effectiveSelectedDisplay, clearSlide]);
+    };
 
     const selectedDisplayIsCycling = effectiveSelectedDisplay ? state.displayCycling?.[effectiveSelectedDisplay] ?? false : false;
 
@@ -804,6 +817,13 @@ export default function AdminDashboard() {
                         <button className="admin-nav-btn" onClick={loadBundles} title="Refresh">
                             <RefreshCw size={13} />
                         </button>
+                        <button
+                            className={`admin-nav-btn ${hasActiveAnnouncement ? "announce-active" : ""}`}
+                            onClick={() => setAnnouncementDialogOpen(true)}
+                            title={hasActiveAnnouncement ? "Lower-third announcement (active)" : "Lower-third announcement"}
+                        >
+                            <Megaphone size={13} />
+                        </button>
 
                         <div className="admin-user-menu" ref={userMenuRef}>
                             <button
@@ -892,6 +912,22 @@ export default function AdminDashboard() {
                             probeVideoDuration
                             onSelect={handleVideoSlideSelected}
                             onClose={() => setVideoSlidePicker(null)}
+                        />
+                    )}
+
+                    {announcementDialogOpen && (
+                        <AnnouncementDialog
+                            selectedDisplayName={selectedDisplayConfig?.name}
+                            initialLine1={selectedDisplayAnnouncement?.line1}
+                            initialLine2={selectedDisplayAnnouncement?.line2}
+                            initialColor={selectedDisplayAnnouncement?.color}
+                            onShow={(line1, line2, color) => {
+                                if (!effectiveSelectedDisplay) return;
+                                showAnnouncement(effectiveSelectedDisplay, line1, line2, color);
+                            }}
+                            onShowAll={(line1, line2, color) => showAnnouncementAll(line1, line2, color)}
+                            onClearAll={() => clearAnnouncementAll()}
+                            onClose={() => setAnnouncementDialogOpen(false)}
                         />
                     )}
 
@@ -1298,7 +1334,14 @@ export default function AdminDashboard() {
                                         }
                                         autoScale={true}
                                         showMissingAssetWarning={true}
+                                        announcementActive={!!selectedDisplayAnnouncement && (!!selectedDisplayAnnouncement.line1 || !!selectedDisplayAnnouncement.line2)}
                                     />
+                                    {selectedDisplayAnnouncement && (selectedDisplayAnnouncement.line1 || selectedDisplayAnnouncement.line2) && (
+                                        <div className="lower-third admin-preview-lower-third" style={{ background: selectedDisplayAnnouncement.color }}>
+                                            {selectedDisplayAnnouncement.line1 && <div className="lower-third-line">{selectedDisplayAnnouncement.line1}</div>}
+                                            {selectedDisplayAnnouncement.line2 && <div className="lower-third-line">{selectedDisplayAnnouncement.line2}</div>}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="admin-preview-controls">
