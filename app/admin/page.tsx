@@ -23,6 +23,9 @@ interface BundleInfo {
     slides: string[];
 }
 
+interface SlideScheduleDraft { mode: "range" | "daily"; start: string; end: string; dailyStart: string; dailyEnd: string }
+const EMPTY_SCHEDULE_DRAFT: SlideScheduleDraft = { mode: "range", start: "", end: "", dailyStart: "", dailyEnd: "" };
+
 const DEFAULT_DURATION = 10;
 
 const normalizeSlideFile = (value: string) => (value.endsWith(".json") ? value : `${value}.json`);
@@ -129,8 +132,6 @@ export default function AdminDashboard() {
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
     const [slideDurationDraft, setSlideDurationDraft] = useState<string>("");
     const [slideTransitionDraft, setSlideTransitionDraft] = useState<TransitionConfig | null>(null);
-    interface SlideScheduleDraft { mode: "range" | "daily"; start: string; end: string; dailyStart: string; dailyEnd: string }
-    const EMPTY_SCHEDULE_DRAFT: SlideScheduleDraft = { mode: "range", start: "", end: "", dailyStart: "", dailyEnd: "" };
     const [slideScheduleDraft, setSlideScheduleDraft] = useState<SlideScheduleDraft>(EMPTY_SCHEDULE_DRAFT);
     const [dragSlide, setDragSlide] = useState<string | null>(null);
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
