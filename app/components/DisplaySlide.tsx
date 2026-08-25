@@ -6,6 +6,8 @@ import * as fabric from "fabric";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import "./FabricVideo"; // side-effect: registers FabricVideo in classRegistry
 import { loadFabricJsonSafely } from "./fabricLoadHelpers";
+import { useFontRegistry } from "../hooks/useFontRegistry";
+import { loadFontsIntoDocument } from "../lib/loadCustomFonts";
 
 interface Props {
     json: object | null;
@@ -35,6 +37,11 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
     const designWidth = bundleMeta?.width;
     const designHeight = bundleMeta?.height;
     const autoScale = autoScaleOverride ?? bundleMeta?.autoScale;
+
+    const fontRegistry = useFontRegistry();
+    useEffect(() => {
+        loadFontsIntoDocument(fontRegistry);
+    }, [fontRegistry]);
 
     // Init canvas once
     useEffect(() => {

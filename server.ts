@@ -5,6 +5,7 @@ import next from "next";
 import { Server as SocketIOServer } from "socket.io";
 import { bundleManager } from "./app/lib/BundleManager";
 import { getDisplayConfigs, ensureDisplayId, setDisplayConfigs, DisplayConfig } from "./app/lib/displayState";
+import { resolveTransition, TransitionConfig } from "./app/lib/transitions";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
@@ -81,6 +82,13 @@ function getServerState(): ServerState {
 interface EnrichedSlide extends ActiveSlide {
     json?: object | null;
     bundleMeta?: unknown;
+    transition?: TransitionConfig;
+}
+
+function resolveSlideTransition(bundle: string, slideId: string): TransitionConfig {
+    const meta = bundleManager.getMeta(bundle);
+    const entry = meta.slides?.find((s) => s.id === slideId);
+    return resolveTransition(entry?.transition, meta.defaultTransition);
 }
 
 function enrichSlideData(slide: ActiveSlide): EnrichedSlide {
@@ -88,6 +96,7 @@ function enrichSlideData(slide: ActiveSlide): EnrichedSlide {
         ...slide,
         json: bundleManager.getSlideJson(slide.bundle, slide.slide),
         bundleMeta: bundleManager.getMeta(slide.bundle),
+        transition: resolveSlideTransition(slide.bundle, slide.slide),
     };
 }
 

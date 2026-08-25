@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { TransitionConfig } from "../lib/transitions";
 
 export type SocketRole = "admin" | "display";
 
@@ -16,6 +17,7 @@ export interface ActiveSlide {
     duration: number;
     json?: object | null;
     bundleMeta?: unknown;
+    transition?: TransitionConfig;
 }
 
 export interface BundleMetaUpdate {

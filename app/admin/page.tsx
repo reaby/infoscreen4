@@ -6,10 +6,11 @@ import dynamic from "next/dynamic";
 import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio, Clock
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
+import { TRANSITION_TYPES, TransitionConfig } from "../lib/transitions";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
 import GlobalSlidePickerModal from "../components/GlobalSlidePickerModal";
 import UserManager from "../components/UserManager";
@@ -25,6 +26,21 @@ interface BundleInfo {
 const DEFAULT_DURATION = 10;
 
 const normalizeSlideFile = (value: string) => (value.endsWith(".json") ? value : `${value}.json`);
+
+function isoToLocalInputValue(iso?: string): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localInputValueToIso(value: string): string | undefined {
+    if (!value) return undefined;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return d.toISOString();
+}
 
 export default function AdminDashboard() {
     const defer = (fn: () => void) => queueMicrotask(fn);
@@ -112,6 +128,10 @@ export default function AdminDashboard() {
     const [liveBundleMeta, setLiveBundleMeta] = useState<BundleMeta>({});
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
     const [slideDurationDraft, setSlideDurationDraft] = useState<string>("");
+    const [slideTransitionDraft, setSlideTransitionDraft] = useState<TransitionConfig | null>(null);
+    interface SlideScheduleDraft { mode: "range" | "daily"; start: string; end: string; dailyStart: string; dailyEnd: string }
+    const EMPTY_SCHEDULE_DRAFT: SlideScheduleDraft = { mode: "range", start: "", end: "", dailyStart: "", dailyEnd: "" };
+    const [slideScheduleDraft, setSlideScheduleDraft] = useState<SlideScheduleDraft>(EMPTY_SCHEDULE_DRAFT);
     const [dragSlide, setDragSlide] = useState<string | null>(null);
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
@@ -169,12 +189,30 @@ export default function AdminDashboard() {
         typeof selectedEntry?.duration === "number" ? String(selectedEntry.duration) : ""
     ), [selectedEntry]);
     const isSlideDurationDirty = selectedSlide !== null && slideDurationDraft !== savedSlideDurationDraft;
+    const savedSlideTransitionDraft = useMemo(() => (
+        selectedEntry?.transition ?? null
+    ), [selectedEntry]);
+    const isSlideTransitionDirty = selectedSlide !== null && (
+        (slideTransitionDraft?.type ?? null) !== (savedSlideTransitionDraft?.type ?? null) ||
+        (slideTransitionDraft?.duration ?? null) !== (savedSlideTransitionDraft?.duration ?? null)
+    );
+    const savedSlideScheduleDraft = useMemo(() => {
+        const sch = selectedEntry?.schedule;
+        if (sch?.mode === "daily") {
+            return { mode: "daily" as const, start: "", end: "", dailyStart: sch.dailyStart, dailyEnd: sch.dailyEnd };
+        }
+        return { mode: "range" as const, start: isoToLocalInputValue(sch?.start), end: isoToLocalInputValue(sch?.end), dailyStart: "", dailyEnd: "" };
+    }, [selectedEntry]);
+    const isSlideScheduleDirty = selectedSlide !== null &&
+        JSON.stringify(slideScheduleDraft) !== JSON.stringify(savedSlideScheduleDraft);
 
     useEffect(() => {
         defer(() => {
             setSlideDurationDraft(selectedSlide ? savedSlideDurationDraft : "");
+            setSlideTransitionDraft(selectedSlide ? savedSlideTransitionDraft : null);
+            setSlideScheduleDraft(selectedSlide ? savedSlideScheduleDraft : EMPTY_SCHEDULE_DRAFT);
         });
-    }, [selectedSlide, savedSlideDurationDraft]);
+    }, [selectedSlide, savedSlideDurationDraft, savedSlideTransitionDraft, savedSlideScheduleDraft]);
 
     const loadBundles = useCallback(async () => {
         const names: string[] = await fetch("/api/bundles").then((r) => r.json()).catch(() => []);
@@ -297,6 +335,32 @@ export default function AdminDashboard() {
             .finally(() => setLoadingPreview(false));
     }, [selectedBundle, selectedSlide]);
 
+    // Pushes a slide to the currently selected display immediately (used by both
+    // the "show selected slide" button and the prev/next transport controls).
+    const pushSlideToDisplay = useCallback(async (slideId: string) => {
+        if (!effectiveSelectedDisplay) return;
+        const targetBundle = selectedDisplayState?.bundle ?? selectedBundle;
+        if (!targetBundle) return;
+
+        let baseDuration = DEFAULT_DURATION;
+        if (selectedBundle === targetBundle) {
+            const fromSelected = bundleMeta.defaultDuration;
+            if (typeof fromSelected === "number" && Number.isFinite(fromSelected)) {
+                baseDuration = fromSelected;
+            }
+        } else {
+            const remoteMeta: BundleMeta = await fetch(`/api/bundles/${encodeURIComponent(targetBundle)}`)
+                .then((r) => r.json())
+                .catch(() => ({}));
+            const fromRemote = remoteMeta.defaultDuration;
+            if (typeof fromRemote === "number" && Number.isFinite(fromRemote)) {
+                baseDuration = fromRemote;
+            }
+        }
+
+        showSlide(effectiveSelectedDisplay, { bundle: targetBundle, slide: slideId, duration: baseDuration });
+    }, [effectiveSelectedDisplay, selectedDisplayState, selectedBundle, bundleMeta, showSlide]);
+
     const handleShowSlide = async () => {
         if (!effectiveSelectedDisplay) return;
         const targetBundle = selectedDisplayState?.bundle ?? selectedBundle;
@@ -316,23 +380,7 @@ export default function AdminDashboard() {
             setSelectedSlide(slideToShow);
         }
 
-        let baseDuration = DEFAULT_DURATION;
-        if (selectedBundle === targetBundle) {
-            const fromSelected = bundleMeta.defaultDuration;
-            if (typeof fromSelected === "number" && Number.isFinite(fromSelected)) {
-                baseDuration = fromSelected;
-            }
-        } else {
-            const remoteMeta: BundleMeta = await fetch(`/api/bundles/${encodeURIComponent(targetBundle)}`)
-                .then((r) => r.json())
-                .catch(() => ({}));
-            const fromRemote = remoteMeta.defaultDuration;
-            if (typeof fromRemote === "number" && Number.isFinite(fromRemote)) {
-                baseDuration = fromRemote;
-            }
-        }
-
-        showSlide(effectiveSelectedDisplay, { bundle: targetBundle, slide: slideToShow, duration: baseDuration });
+        await pushSlideToDisplay(slideToShow);
     };
 
     const handleStopCycle = useCallback(() => {
@@ -523,6 +571,14 @@ export default function AdminDashboard() {
     };
 
     const navigate = (dir: 1 | -1) => {
+        if (previewTab === "live") {
+            if (!effectiveSelectedDisplay || activeBundleSlides.length === 0) return;
+            const cur = selectedDisplayState?.slide ? activeBundleSlides.indexOf(selectedDisplayState.slide) : -1;
+            const next = (cur + dir + activeBundleSlides.length) % activeBundleSlides.length;
+            pushSlideToDisplay(activeBundleSlides[next]);
+            return;
+        }
+
         if (!slides.length) return;
         const cur = selectedSlide ? slides.indexOf(selectedSlide) : -1;
         const next = (cur + dir + slides.length) % slides.length;
@@ -581,6 +637,55 @@ export default function AdminDashboard() {
 
         saveMeta({ slides: nextSlides });
     }, [orderedEntries, saveMeta, selectedSlide, slideDurationDraft, slides]);
+
+    const handleSaveSlideTransition = useCallback(() => {
+        if (!selectedSlide) return;
+
+        const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
+        const nextSlides = slides.map((name) => {
+            const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
+            if (name !== selectedSlide) return entry;
+            if (!slideTransitionDraft) {
+                const rest = { ...entry };
+                delete rest.transition;
+                return rest;
+            }
+            return { ...entry, transition: slideTransitionDraft };
+        });
+
+        saveMeta({ slides: nextSlides });
+    }, [orderedEntries, saveMeta, selectedSlide, slideTransitionDraft, slides]);
+
+    const handleSaveSlideSchedule = useCallback(() => {
+        if (!selectedSlide) return;
+
+        let schedule: BundleSlideEntry["schedule"];
+        if (slideScheduleDraft.mode === "daily") {
+            if (slideScheduleDraft.dailyStart && slideScheduleDraft.dailyEnd) {
+                schedule = { mode: "daily", dailyStart: slideScheduleDraft.dailyStart, dailyEnd: slideScheduleDraft.dailyEnd };
+            }
+        } else {
+            const start = localInputValueToIso(slideScheduleDraft.start);
+            const end = localInputValueToIso(slideScheduleDraft.end);
+            if (start || end) {
+                schedule = { mode: "range", ...(start ? { start } : {}), ...(end ? { end } : {}) };
+            }
+        }
+
+        const normalized = new Map(orderedEntries.map((entry) => [entry.id, entry]));
+        const nextSlides = slides.map((name) => {
+            const entry = normalized.get(name) ?? { id: name, type: "fabric" as const, data: `${name}.json`, active: true };
+            if (name !== selectedSlide) return entry;
+            if (!schedule) {
+                const rest = { ...entry };
+                delete rest.schedule;
+                return rest;
+            }
+            return { ...entry, schedule };
+        });
+
+        saveMeta({ slides: nextSlides });
+    }, [orderedEntries, saveMeta, selectedSlide, slideScheduleDraft, slides]);
 
     if (!authChecked) {
         return null;
@@ -902,6 +1007,11 @@ export default function AdminDashboard() {
                                                 {isActive(selectedBundle!, slide) ? <Play size={14} className="admin-playing-icon" /> : null}
                                             </span>
                                             <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{existingEntry?.title || slide}</span>
+                                            {existingEntry?.schedule && (
+                                                <span className="admin-label" title="This slide has a scheduled cycling window">
+                                                    <Clock size={12} />
+                                                </span>
+                                            )}
                                             <button
                                                 className={`admin-slide-toggle${isEnabled ? " on" : ""}`}
                                                 title={isEnabled ? "Remove from cycle" : "Add to cycle"}
@@ -1146,6 +1256,125 @@ export default function AdminDashboard() {
                                                 title="Save selected slide duration"
                                             >Save</button>
                                             {selectedSlide && isSlideDurationDirty && (
+                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
+                                            )}
+                                        </div>
+                                        <div className="admin-preview-col-right">
+                                            <label className="admin-label">Slide transition</label>
+                                            <select
+                                                value={slideTransitionDraft?.type ?? ""}
+                                                onChange={(e) => {
+                                                    const type = e.target.value;
+                                                    if (type === "") { setSlideTransitionDraft(null); return; }
+                                                    setSlideTransitionDraft({
+                                                        type: type as TransitionConfig["type"],
+                                                        duration: slideTransitionDraft?.duration ?? 600,
+                                                    });
+                                                }}
+                                                className="toolbar-number-input"
+                                                style={{ width: 130 }}
+                                                title="Selected slide transition override (blank = use bundle default)"
+                                                disabled={!selectedSlide}
+                                            >
+                                                <option value="">Use bundle default</option>
+                                                {TRANSITION_TYPES.map((t) => (
+                                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                                ))}
+                                            </select>
+                                            {slideTransitionDraft && (
+                                                <>
+                                                    <input
+                                                        type="number" min={0} max={5000}
+                                                        value={slideTransitionDraft.duration}
+                                                        onChange={(e) => {
+                                                            const value = Number(e.target.value);
+                                                            setSlideTransitionDraft((prev) => prev && ({
+                                                                ...prev,
+                                                                duration: Number.isFinite(value) ? value : prev.duration,
+                                                            }));
+                                                        }}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 64 }}
+                                                        title="Transition duration"
+                                                    />
+                                                    <span className="admin-label">ms</span>
+                                                </>
+                                            )}
+                                            <button
+                                                className="admin-nav-btn"
+                                                onClick={handleSaveSlideTransition}
+                                                disabled={!isSlideTransitionDirty}
+                                                title="Save selected slide transition"
+                                            >Save</button>
+                                            {selectedSlide && isSlideTransitionDirty && (
+                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
+                                            )}
+                                        </div>
+                                        <div className="admin-preview-col-right">
+                                            <label className="admin-label">Slide schedule</label>
+                                            <select
+                                                value={slideScheduleDraft.mode}
+                                                onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, mode: e.target.value as "range" | "daily" }))}
+                                                className="toolbar-number-input"
+                                                style={{ width: 110 }}
+                                                title="Date range = a one-off window. Daily time = recurring every day."
+                                                disabled={!selectedSlide}
+                                            >
+                                                <option value="range">Date range</option>
+                                                <option value="daily">Daily time</option>
+                                            </select>
+                                            {slideScheduleDraft.mode === "range" ? (
+                                                <>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={slideScheduleDraft.start}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, start: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 190 }}
+                                                        title="Slide becomes eligible for cycling from this date/time (blank = no start restriction)"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                    <span className="admin-label">to</span>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={slideScheduleDraft.end}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, end: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 190 }}
+                                                        title="Slide stops being eligible for cycling after this date/time (blank = no end restriction)"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <input
+                                                        type="time"
+                                                        value={slideScheduleDraft.dailyStart}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, dailyStart: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 90 }}
+                                                        title="Slide cycles in every day from this time"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                    <span className="admin-label">to</span>
+                                                    <input
+                                                        type="time"
+                                                        value={slideScheduleDraft.dailyEnd}
+                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, dailyEnd: e.target.value }))}
+                                                        className="toolbar-number-input"
+                                                        style={{ width: 90 }}
+                                                        title="Slide cycles out every day at this time (earlier than start = wraps past midnight)"
+                                                        disabled={!selectedSlide}
+                                                    />
+                                                </>
+                                            )}
+                                            <button
+                                                className="admin-nav-btn"
+                                                onClick={handleSaveSlideSchedule}
+                                                disabled={!isSlideScheduleDirty}
+                                                title="Save selected slide schedule"
+                                            >Save</button>
+                                            {selectedSlide && isSlideScheduleDirty && (
                                                 <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
                                             )}
                                         </div>
