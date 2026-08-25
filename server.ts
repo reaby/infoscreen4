@@ -30,6 +30,7 @@ interface ServerState {
     displayStates: Record<string, ActiveSlide | null>;
     displayConnections: Record<string, number>;
     displayCycling: Record<string, boolean>;
+    displayQueuedNext: Record<string, string | null>;
     streams: StreamInfo[];
 }
 
@@ -46,6 +47,7 @@ const displayCycleTimers: Record<string, ReturnType<typeof setTimeout> | null> =
 const displayCycleSlides: Record<string, CycleSlide[]> = {};
 const displayCycleIndex: Record<string, number> = {};
 const displayCycleBaseDuration: Record<string, number> = {};
+const displayQueuedNext: Record<string, string | null> = {};
 let io: SocketIOServer | null = null;
 
 // WebRTC streaming state
@@ -75,6 +77,7 @@ function getServerState(): ServerState {
         displayCycling: Object.fromEntries(
             Object.entries(displayCycleTimers).map(([displayId, timer]) => [displayId, timer !== null])
         ),
+        displayQueuedNext: { ...displayQueuedNext },
         streams: [...streams.values()],
     };
 }
@@ -133,6 +136,7 @@ function normalizeDisplayKeys() {
             delete displayCycleSlides[key];
             delete displayCycleIndex[key];
             delete displayCycleBaseDuration[key];
+            delete displayQueuedNext[key];
         }
     }
     for (const conf of displayConfigs) {
@@ -200,7 +204,14 @@ function startCycle(displayId: string, initial: ActiveSlide) {
         displayCycleSlides[displayId] = getBundleSlides(bundle);
         if (displayCycleSlides[displayId].length === 0) return;
         const currentIdx = displayCycleSlides[displayId].findIndex((s) => s.id === currentActive.slide);
-        displayCycleIndex[displayId] = currentIdx < 0 ? 0 : (currentIdx + 1) % displayCycleSlides[displayId].length;
+        const queuedId = displayQueuedNext[displayId];
+        let nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % displayCycleSlides[displayId].length;
+        if (queuedId) {
+            const queuedIdx = displayCycleSlides[displayId].findIndex((s) => s.id === queuedId);
+            if (queuedIdx >= 0) nextIdx = queuedIdx;
+            displayQueuedNext[displayId] = null;
+        }
+        displayCycleIndex[displayId] = nextIdx;
         const nextEntry = displayCycleSlides[displayId][displayCycleIndex[displayId]];
         const nextDelay = resolveSlideDuration(nextEntry, displayCycleBaseDuration[displayId]);
         displayStates[displayId] = { bundle, slide: nextEntry.id, duration: nextDelay };
@@ -297,6 +308,7 @@ app.prepare().then(() => {
             socket.on("slide:show", (data: ActiveSlide & { displayId: string }) => {
                 const targetId = ensureDisplayId(data.displayId);
                 displayStates[targetId] = { bundle: data.bundle, slide: data.slide, duration: data.duration };
+                displayQueuedNext[targetId] = null;
                 if (io) {
                     io.to(displayRoom(targetId)).emit("slide:show", enrichSlideData(displayStates[targetId]!));
                 }
@@ -308,6 +320,7 @@ app.prepare().then(() => {
                 const targetId = ensureDisplayId(data.displayId);
                 stopCycle(targetId);
                 displayStates[targetId] = null;
+                displayQueuedNext[targetId] = null;
                 if (io) {
                     io.to(displayRoom(targetId)).emit("slide:clear");
                 }
@@ -317,6 +330,12 @@ app.prepare().then(() => {
             socket.on("cycle:stop", (data: { displayId: string }) => {
                 const targetId = ensureDisplayId(data.displayId);
                 stopCycle(targetId);
+                emitAdminState();
+            });
+
+            socket.on("cycle:queueNext", (data: { displayId: string; slideId: string | null }) => {
+                const targetId = ensureDisplayId(data.displayId);
+                displayQueuedNext[targetId] = data.slideId ?? null;
                 emitAdminState();
             });
 
@@ -332,6 +351,7 @@ app.prepare().then(() => {
                 const bundle = data?.bundle;
                 if (typeof bundle !== "string" || !bundle) return;
 
+                displayQueuedNext[targetId] = null;
                 const slides = getBundleSlides(bundle);
                 if (slides.length > 0) {
                     const duration = displayStates[targetId]?.duration ?? 10;

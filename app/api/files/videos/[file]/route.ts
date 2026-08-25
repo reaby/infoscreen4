@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
-import { readFile, unlink, rename, stat, open } from "fs/promises";
+import { readFile, writeFile, unlink, rename, stat, open } from "fs/promises";
 import path from "path";
 import { getVideosDir } from "@/app/lib/paths";
 
 const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
+
+function sidecarFor(filePath: string): string {
+    return `${filePath}.json`;
+}
 
 const MIME: Record<string, string> = {
     mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg",
@@ -96,6 +100,7 @@ export async function DELETE(
     if (!filePath) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     try {
         await unlink(filePath);
+        try { await unlink(sidecarFor(filePath)); } catch { /* no sidecar to remove */ }
         return NextResponse.json({ ok: true });
     } catch {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -112,6 +117,17 @@ export async function PATCH(
 
     const body = await req.json().catch(() => null);
     const newName: unknown = body?.newName;
+    const durationRaw: unknown = body?.duration;
+
+    if (newName === undefined && typeof durationRaw === "number" && Number.isFinite(durationRaw) && durationRaw >= 0) {
+        try {
+            await writeFile(sidecarFor(filePath), JSON.stringify({ duration: durationRaw }), "utf8");
+            return NextResponse.json({ ok: true, duration: durationRaw });
+        } catch {
+            return NextResponse.json({ error: "Failed to write metadata" }, { status: 500 });
+        }
+    }
+
     if (typeof newName !== "string" || !NAME_RE.test(newName)) {
         return NextResponse.json({ error: "Invalid new filename" }, { status: 400 });
     }
@@ -121,6 +137,7 @@ export async function PATCH(
 
     try {
         await rename(filePath, newPath);
+        try { await rename(sidecarFor(filePath), sidecarFor(newPath)); } catch { /* no sidecar to rename */ }
         return NextResponse.json({ name: newName });
     } catch {
         return NextResponse.json({ error: "Rename failed" }, { status: 500 });

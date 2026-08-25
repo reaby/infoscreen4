@@ -6,16 +6,18 @@ import dynamic from "next/dynamic";
 import { useSocket, DisplayConfig } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio, Clock
+    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio, Clock, Video, SkipForward
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import { TRANSITION_TYPES, TransitionConfig } from "../lib/transitions";
+import { isSlideScheduledNow } from "../lib/schedule";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
 import GlobalSlidePickerModal from "../components/GlobalSlidePickerModal";
 import UserManager from "../components/UserManager";
 import AdminContextMenu from "../components/AdminContextMenu";
 import StreamsPanel from "../components/StreamsPanel";
+import FileManagerDialog from "../components/FileManagerDialog";
 const DisplaySlide = dynamic(() => import("../components/DisplaySlide"), { ssr: false });
 
 interface BundleInfo {
@@ -65,7 +67,7 @@ export default function AdminDashboard() {
     const [currentUser, setCurrentUser] = useState<string | null>(null);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement | null>(null);
-    const { connected, state, showSlide, clearSlide, stopCycle, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate, showStream, clearStream, socketRef } = useSocket("admin");
+    const { connected, state, showSlide, clearSlide, stopCycle, queueNextSlide, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate, showStream, clearStream, socketRef } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState<string | null>(null);
     const [displayDrafts, setDisplayDrafts] = useState<DisplayConfig[]>([]);
@@ -139,6 +141,8 @@ export default function AdminDashboard() {
     const [confirmActivateBundle, setConfirmActivateBundle] = useState<string | null>(null);
     const [displayActiveStreams, setDisplayActiveStreams] = useState<Record<string, string>>({});
     const [globalSlidePickerOpen, setGlobalSlidePickerOpen] = useState(false);
+    // null = closed; "new" = adding a new video slide; a slide id = replacing that slide's video
+    const [videoSlidePicker, setVideoSlidePicker] = useState<string | null>(null);
     const bundleMetaRef = useRef<BundleMeta>({});
     const liveLoadSeqRef = useRef(0);
 
@@ -182,6 +186,21 @@ export default function AdminDashboard() {
     const entryBySlide = useMemo(() => (
         new Map(orderedEntries.map((entry) => [entry.id, entry]))
     ), [orderedEntries]);
+    const isEntryEligible = (entry: BundleSlideEntry | undefined) =>
+        !entry || (entry.active !== false && isSlideScheduledNow(entry.schedule, new Date()));
+    // Slide ids eligible to cycle in (active + within schedule) — used for prev/next navigation
+    // so it skips disabled/out-of-schedule slides instead of stepping onto them.
+    const eligibleSlides = useMemo(
+        () => slides.filter((id) => isEntryEligible(entryBySlide.get(id))),
+        [slides, entryBySlide]
+    );
+    const liveEntryBySlide = useMemo(() => (
+        new Map((liveBundleMeta.slides ?? []).map((entry) => [entry.id, entry]))
+    ), [liveBundleMeta.slides]);
+    const eligibleActiveBundleSlides = useMemo(
+        () => activeBundleSlides.filter((id) => isEntryEligible(liveEntryBySlide.get(id))),
+        [activeBundleSlides, liveEntryBySlide]
+    );
     const selectedEntry = useMemo(() => {
         if (!selectedSlide) return undefined;
         return orderedEntries.find((entry) => entry.id === selectedSlide);
@@ -571,19 +590,54 @@ export default function AdminDashboard() {
         }
     };
 
-    const navigate = (dir: 1 | -1) => {
-        if (previewTab === "live") {
-            if (!effectiveSelectedDisplay || activeBundleSlides.length === 0) return;
-            const cur = selectedDisplayState?.slide ? activeBundleSlides.indexOf(selectedDisplayState.slide) : -1;
-            const next = (cur + dir + activeBundleSlides.length) % activeBundleSlides.length;
-            pushSlideToDisplay(activeBundleSlides[next]);
+    const handleVideoSlideSelected = async (filename: string, _url: string, duration?: number) => {
+        if (!selectedBundle) return;
+        const target = videoSlidePicker;
+        setVideoSlidePicker(null);
+        if (!target) return;
+
+        if (target === "new") {
+            const nextSlides: BundleSlideEntry[] = [...(bundleMeta?.slides || []), {
+                id: Date.now().toString(),
+                type: "video" as const,
+                data: filename,
+                videoDuration: duration,
+                duration: duration !== undefined ? Math.round(duration) : undefined,
+                title: filename,
+                active: true,
+            }];
+            await saveMeta({ slides: nextSlides });
+            await loadBundles();
+            setSelectedSlide(nextSlides[nextSlides.length - 1].id);
             return;
         }
 
-        if (!slides.length) return;
-        const cur = selectedSlide ? slides.indexOf(selectedSlide) : -1;
-        const next = (cur + dir + slides.length) % slides.length;
-        setSelectedSlide(slides[next]);
+        const nextSlides = (bundleMeta.slides || []).map((entry) => {
+            if (entry.id !== target) return entry;
+            const keepDuration = entry.videoDuration !== undefined && entry.duration === Math.round(entry.videoDuration);
+            return {
+                ...entry,
+                data: filename,
+                videoDuration: duration,
+                duration: !keepDuration ? entry.duration : (duration !== undefined ? Math.round(duration) : entry.duration),
+            };
+        });
+        saveMeta({ slides: nextSlides });
+    };
+
+    const navigate = (dir: 1 | -1) => {
+        if (previewTab === "live") {
+            if (!effectiveSelectedDisplay || eligibleActiveBundleSlides.length === 0) return;
+            const cur = selectedDisplayState?.slide ? eligibleActiveBundleSlides.indexOf(selectedDisplayState.slide) : -1;
+            const next = (cur + dir + eligibleActiveBundleSlides.length) % eligibleActiveBundleSlides.length;
+            pushSlideToDisplay(eligibleActiveBundleSlides[next]);
+            return;
+        }
+
+        if (!eligibleSlides.length) return;
+        const cur = selectedSlide ? eligibleSlides.indexOf(selectedSlide) : -1;
+        const next = (cur + dir + eligibleSlides.length) % eligibleSlides.length;
+        setSelectedSlide(eligibleSlides[next]);
     };
 
     const isActive = (bundle: string, slide: string) =>
@@ -832,6 +886,15 @@ export default function AdminDashboard() {
                         />
                     )}
 
+                    {videoSlidePicker !== null && (
+                        <FileManagerDialog
+                            basePath="/api/files/videos"
+                            probeVideoDuration
+                            onSelect={handleVideoSlideSelected}
+                            onClose={() => setVideoSlidePicker(null)}
+                        />
+                    )}
+
                     <AdminContextMenu
                         visible={adminContextMenu.visible}
                         x={adminContextMenu.x}
@@ -935,13 +998,22 @@ export default function AdminDashboard() {
                                             title: title || undefined,
                                             active: true
                                         }];
-                                        saveMeta({ slides: nextSlides as BundleSlideEntry[] });
+                                        await saveMeta({ slides: nextSlides as BundleSlideEntry[] });
+                                        await loadBundles();
                                         setSelectedSlide(nextSlides[nextSlides.length - 1].id);
                                     }}
                                     title={selectedBundle ? "Add website slide" : "Select a bundle first"}
                                     disabled={!selectedBundle}
                                 >
                                     <Globe size={14} />
+                                </button>
+                                <button
+                                    className="admin-icon-btn"
+                                    onClick={() => setVideoSlidePicker("new")}
+                                    title={selectedBundle ? "Add video slide" : "Select a bundle first"}
+                                    disabled={!selectedBundle}
+                                >
+                                    <Video size={14} />
                                 </button>
                             </div>
                         </div>
@@ -964,7 +1036,11 @@ export default function AdminDashboard() {
                                                 x: e.clientX,
                                                 y: e.clientY,
                                                 items: [
-                                                    { label: existingEntry?.type === "website" ? "Edit URL" : "Rename File", onClick: () => handleRenameSlide(selectedBundle!, slide) },
+                                                    ...(effectiveSelectedDisplay ? [
+                                                        state.displayQueuedNext?.[effectiveSelectedDisplay] === slide
+                                                            ? { label: "Cancel Queued Next", onClick: () => queueNextSlide(effectiveSelectedDisplay, null) }
+                                                            : { label: "Queue Next", onClick: () => queueNextSlide(effectiveSelectedDisplay, slide) }
+                                                    ] : []),
                                                     {
                                                         label: "Edit Title", onClick: async () => {
                                                             const newTitle = await askPrompt("Slide Title:", existingEntry?.title || slide);
@@ -975,6 +1051,9 @@ export default function AdminDashboard() {
                                                             }
                                                         }
                                                     },
+                                                    existingEntry?.type === "video"
+                                                        ? { label: "Replace Video", onClick: () => setVideoSlidePicker(slide) }
+                                                        : { label: existingEntry?.type === "website" ? "Edit URL" : "Rename File", onClick: () => handleRenameSlide(selectedBundle!, slide) },
                                                     { label: "Duplicate Slide", onClick: () => handleDuplicateSlide(selectedBundle!, slide) },
                                                     { label: "Delete Slide", danger: true, onClick: () => handleDeleteSlide(selectedBundle!, slide) }
                                                 ]
@@ -1011,6 +1090,11 @@ export default function AdminDashboard() {
                                             {existingEntry?.schedule && (
                                                 <span className="admin-label" title="This slide has a scheduled cycling window">
                                                     <Clock size={12} />
+                                                </span>
+                                            )}
+                                            {effectiveSelectedDisplay && state.displayQueuedNext?.[effectiveSelectedDisplay] === slide && (
+                                                <span className="admin-label" title="Queued to play next">
+                                                    <SkipForward size={12} />
                                                 </span>
                                             )}
                                             <button
@@ -1228,6 +1312,13 @@ export default function AdminDashboard() {
                                                     >
                                                         <Pencil size={13} /> Edit URL
                                                     </button>
+                                                ) : bundleMeta?.slides?.find((s) => s.id === selectedSlide)?.type === "video" ? (
+                                                    <button
+                                                        className="admin-nav-btn"
+                                                        onClick={() => setVideoSlidePicker(selectedSlide)}
+                                                    >
+                                                        <Video size={13} /> Replace Video
+                                                    </button>
                                                 ) : (
                                                     <Link
                                                         href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
@@ -1390,7 +1481,7 @@ export default function AdminDashboard() {
                 {/* ── Footer ─────────────────────────────── */}
                 <footer className="admin-footer">
                     <div className="admin-footer-controls">
-                        <button className="admin-foot-btn" onClick={() => navigate(-1)} disabled={slides.length < 2} title="Previous slide">
+                        <button className="admin-foot-btn" onClick={() => navigate(-1)} disabled={(previewTab === "live" ? eligibleActiveBundleSlides : eligibleSlides).length < 2} title="Previous slide">
                             <StepBack size={16} />
                         </button>
                         <button
@@ -1403,7 +1494,7 @@ export default function AdminDashboard() {
                         >
                             {state.isCycling ? <Pause size={16} /> : <Play size={16} />}
                         </button>
-                        <button className="admin-foot-btn" onClick={() => navigate(1)} disabled={slides.length < 2} title="Next slide">
+                        <button className="admin-foot-btn" onClick={() => navigate(1)} disabled={(previewTab === "live" ? eligibleActiveBundleSlides : eligibleSlides).length < 2} title="Next slide">
                             <StepForward size={16} />
                         </button>
                         <div className="admin-footer-sep" />

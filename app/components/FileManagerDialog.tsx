@@ -7,17 +7,50 @@ export interface FileManagerProps {
     /** API base path, e.g. "/api/files/backgrounds" */
     basePath: string;
     /** Called when the user clicks "Load" on a file */
-    onSelect?: (filename: string, url: string) => void;
+    onSelect?: (filename: string, url: string, duration?: number) => void;
     onClose: () => void;
+    /** When set, treats listed/uploaded files as videos: probes .duration client-side
+     *  (on upload, and lazily on select if missing) and persists it via the API. */
+    probeVideoDuration?: boolean;
 }
 
 interface FileEntry {
     name: string;
+    duration?: number | null;
     /** Inline rename value; undefined = not editing */
     renaming?: string;
 }
 
-export default function FileManagerDialog({ basePath, onSelect, onClose }: FileManagerProps) {
+function formatDuration(seconds: number): string {
+    const total = Math.round(seconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function readVideoDuration(url: string): Promise<number | null> {
+    return new Promise((resolve) => {
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.muted = true;
+        video.src = url;
+        const cleanup = () => {
+            video.removeAttribute("src");
+            video.load();
+        };
+        video.onloadedmetadata = () => {
+            const d = video.duration;
+            cleanup();
+            resolve(Number.isFinite(d) ? d : null);
+        };
+        video.onerror = () => {
+            cleanup();
+            resolve(null);
+        };
+    });
+}
+
+export default function FileManagerDialog({ basePath, onSelect, onClose, probeVideoDuration }: FileManagerProps) {
     const [files, setFiles] = useState<FileEntry[]>([]);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -26,8 +59,8 @@ export default function FileManagerDialog({ basePath, onSelect, onClose }: FileM
     const load = useCallback(async () => {
         setError(null);
         try {
-            const data: string[] = await fetch(basePath).then((r) => r.json());
-            setFiles(data.map((name) => ({ name })));
+            const data: Array<string | { name: string; duration?: number | null }> = await fetch(basePath).then((r) => r.json());
+            setFiles(data.map((item) => typeof item === "string" ? { name: item } : { name: item.name, duration: item.duration ?? undefined }));
         } catch {
             setError("Failed to load files");
         }
@@ -43,6 +76,10 @@ export default function FileManagerDialog({ basePath, onSelect, onClose }: FileM
         try {
             const form = new FormData();
             form.append("file", file);
+            if (probeVideoDuration) {
+                const duration = await readVideoDuration(URL.createObjectURL(file));
+                if (duration !== null) form.append("duration", String(duration));
+            }
             const res = await fetch(basePath, { method: "POST", body: form });
             if (!res.ok) {
                 const j = await res.json().catch(() => ({}));
@@ -55,6 +92,24 @@ export default function FileManagerDialog({ basePath, onSelect, onClose }: FileM
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = "";
         }
+    };
+
+    const handleSelect = async (f: FileEntry) => {
+        const url = `${basePath}/${encodeURIComponent(f.name)}`;
+        let duration = f.duration ?? undefined;
+        if (probeVideoDuration && duration === undefined) {
+            const probed = await readVideoDuration(url);
+            if (probed !== null) {
+                duration = probed;
+                fetch(`${basePath}/${encodeURIComponent(f.name)}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ duration: probed }),
+                }).catch(() => { /* best-effort sidecar write */ });
+            }
+        }
+        onSelect?.(f.name, url, duration);
+        onClose();
     };
 
     const handleDelete = async (name: string) => {
@@ -133,9 +188,14 @@ export default function FileManagerDialog({ basePath, onSelect, onClose }: FileM
                                 <span
                                     className="fm-name"
                                     title={onSelect ? `Load "${f.name}"` : f.name}
-                                    onClick={onSelect ? () => { onSelect(f.name, `${basePath}/${encodeURIComponent(f.name)}`); onClose(); } : undefined}
+                                    onClick={onSelect ? () => void handleSelect(f) : undefined}
                                     style={onSelect ? { cursor: "pointer" } : undefined}
-                                >{f.name}</span>
+                                >
+                                    {f.name}
+                                    {probeVideoDuration && typeof f.duration === "number" && (
+                                        <span className="fm-duration"> ({formatDuration(f.duration)})</span>
+                                    )}
+                                </span>
                             )}
 
                             <div className="fm-actions">
@@ -149,7 +209,7 @@ export default function FileManagerDialog({ basePath, onSelect, onClose }: FileM
                                         {onSelect && (
                                             <button
                                                 className="fm-btn primary"
-                                                onClick={() => { onSelect(f.name, `${basePath}/${encodeURIComponent(f.name)}`); onClose(); }}
+                                                onClick={() => void handleSelect(f)}
                                                 title="Use this file"
                                             >Load</button>
                                         )}

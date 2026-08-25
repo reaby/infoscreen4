@@ -39,6 +39,7 @@ export interface ServerState {
     displayStates: Record<string, ActiveSlide | null>;
     displayConnections: Record<string, number>;
     displayCycling: Record<string, boolean>;
+    displayQueuedNext: Record<string, string | null>;
     streams: StreamInfo[];
 }
 
@@ -53,6 +54,7 @@ export function useSocket(role: SocketRole, displayId?: string) {
         displayStates: {},
         displayConnections: {},
         displayCycling: {},
+        displayQueuedNext: {},
         streams: [],
     });
     const [bundleMetaUpdate, setBundleMetaUpdate] = useState<BundleMetaUpdate | null>(null);
@@ -109,6 +111,10 @@ export function useSocket(role: SocketRole, displayId?: string) {
         socketRef.current?.emit("cycle:stop", { displayId });
     };
 
+    const queueNextSlide = (displayId: string, slideId: string | null) => {
+        socketRef.current?.emit("cycle:queueNext", { displayId, slideId });
+    };
+
     const updateBundleMeta = (bundle: string, meta: Record<string, unknown>, displayId?: string) => {
         socketRef.current?.emit("bundle:meta", { bundle, meta, displayId });
     };
@@ -135,6 +141,7 @@ export function useSocket(role: SocketRole, displayId?: string) {
         showSlide,
         clearSlide,
         stopCycle,
+        queueNextSlide,
         updateBundleMeta,
         activateBundle,
         updateDisplayConfig,

@@ -48,6 +48,15 @@
       "data": "https://example.com",
       "title": "Test Website Slide",
       "active": false
+    },
+    {
+      "id": "1787681007950",
+      "type": "video",
+      "data": "example.mp4",
+      "title": "example.mp4",
+      "active": true,
+      "duration": 10,
+      "videoDuration": 10.033333
     }
   ],
   "showLocalTime": true,

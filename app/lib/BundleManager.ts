@@ -224,13 +224,14 @@ export class BundleManager {
             const title = (candidate as any).title;
 
             if (typeof id !== "string" || !id) continue;
-            if (type !== "fabric" && type !== "website") continue;
+            if (type !== "fabric" && type !== "website" && type !== "video") continue;
             if (typeof data !== "string" || !data) continue;
 
             if (seen.has(id)) continue;
 
             const activeRaw = (candidate as any).active;
             const durationRaw = (candidate as any).duration;
+            const videoDurationRaw = (candidate as any).videoDuration;
 
             const entry: BundleSlideEntry = {
                 id,
@@ -241,6 +242,9 @@ export class BundleManager {
             };
             if (typeof durationRaw === "number" && Number.isFinite(durationRaw) && durationRaw >= 0) {
                 entry.duration = durationRaw;
+            }
+            if (typeof videoDurationRaw === "number" && Number.isFinite(videoDurationRaw) && videoDurationRaw >= 0) {
+                entry.videoDuration = videoDurationRaw;
             }
             const transition = parseTransition((candidate as any).transition);
             if (transition) {

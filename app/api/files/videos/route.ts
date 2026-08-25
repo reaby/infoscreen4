@@ -1,16 +1,34 @@
 import { NextResponse } from "next/server";
-import { readdir, writeFile, mkdir } from "fs/promises";
+import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { getVideosDir } from "@/app/lib/paths";
 
 const MAX_SIZE = 200 * 1024 * 1024; // 200 MB
+
+function sidecarPath(videosDir: string, filename: string): string {
+    return path.join(videosDir, `${filename}.json`);
+}
+
+async function readDuration(videosDir: string, filename: string): Promise<number | null> {
+    try {
+        const raw = await readFile(sidecarPath(videosDir, filename), "utf8");
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.duration === "number" && Number.isFinite(parsed.duration) ? parsed.duration : null;
+    } catch {
+        return null;
+    }
+}
 
 export async function GET() {
     const videosDir = getVideosDir();
     try {
         await mkdir(videosDir, { recursive: true });
         const files = await readdir(videosDir);
-        return NextResponse.json(files.filter((f) => !f.startsWith(".")));
+        const names = files.filter((f) => !f.startsWith(".") && !f.endsWith(".json"));
+        const entries = await Promise.all(
+            names.map(async (name) => ({ name, duration: await readDuration(videosDir, name) }))
+        );
+        return NextResponse.json(entries);
     } catch {
         return NextResponse.json([]);
     }
@@ -40,5 +58,12 @@ export async function POST(req: Request) {
     const dest = path.join(videosDir, safeName);
     const buf = Buffer.from(await file.arrayBuffer());
     await writeFile(dest, buf);
-    return NextResponse.json({ name: safeName });
+
+    const durationRaw = form.get("duration");
+    const duration = typeof durationRaw === "string" ? Number(durationRaw) : NaN;
+    if (Number.isFinite(duration) && duration >= 0) {
+        await writeFile(sidecarPath(videosDir, safeName), JSON.stringify({ duration }), "utf8");
+    }
+
+    return NextResponse.json({ name: safeName, duration: Number.isFinite(duration) ? duration : null });
 }

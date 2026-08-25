@@ -220,7 +220,18 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                         allow="autoplay; fullscreen"
                     />
                 )}
-                <canvas ref={canvasRef} className="ds-canvas" style={activeEntry?.type === "website" ? { display: "none" } : undefined} />
+                {activeEntry?.type === "video" && (
+                    <video
+                        key={activeEntry.data}
+                        src={`/api/files/videos/${encodeURIComponent(activeEntry.data)}`}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        style={{ width: "100%", height: "100%", objectFit: "contain", position: "absolute", inset: 0, zIndex: 1 }}
+                    />
+                )}
+                <canvas ref={canvasRef} className="ds-canvas" style={activeEntry?.type === "website" || activeEntry?.type === "video" ? { display: "none" } : undefined} />
                 {showMissingAssetWarning && hasMissingAssets && (
                     <div
                         style={{
