@@ -33,6 +33,14 @@ const DEFAULT_DURATION = 10;
 
 const normalizeSlideFile = (value: string) => (value.endsWith(".json") ? value : `${value}.json`);
 
+// Website slide URLs are used directly as an iframe src. Without a scheme, the
+// browser resolves them relative to infoscreen's own origin and the iframe
+// silently fails to load the intended site — so default a missing scheme to https.
+const normalizeWebsiteUrl = (value: string) => {
+    const trimmed = value.trim();
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
 function isoToLocalInputValue(iso?: string): string {
     if (!iso) return "";
     const d = new Date(iso);
@@ -601,7 +609,7 @@ export default function AdminDashboard() {
         if (isWeb) {
             const res = await askPrompt("Edit Website URL:", entry?.data);
             if (res === null) return;
-            newName = res.trim();
+            newName = res.trim() ? normalizeWebsiteUrl(res) : "";
         } else {
             const res = await askPrompt("Rename slide file to:", name);
             if (res === null) return;
@@ -1051,7 +1059,7 @@ export default function AdminDashboard() {
                                         const nextSlides = [...(bundleMeta?.slides || []), {
                                             id: Date.now().toString(),
                                             type: "website" as const,
-                                            data: url,
+                                            data: normalizeWebsiteUrl(url),
                                             title: title || undefined,
                                             active: true
                                         }];

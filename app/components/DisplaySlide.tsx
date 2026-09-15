@@ -27,6 +27,7 @@ function isVideo(name: string) {
 }
 
 export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOverride, showMissingAssetWarning = false, activeEntry, announcementActive = false }: Props) {
+    const defer = (fn: () => void) => queueMicrotask(fn);
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasWrapRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -119,12 +120,26 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
 
     const [hasMissingAssets, setHasMissingAssets] = useState(false);
     const [localTime, setLocalTime] = useState("");
+    const [iframeFailed, setIframeFailed] = useState(false);
+
+    // Sites that refuse to be framed (X-Frame-Options/CSP frame-ancestors) don't
+    // reliably fire an iframe error event — they just stay blank. A load timeout
+    // catches that case too, alongside genuine network failures.
+    const websiteUrl = activeEntry?.type === "website" ? activeEntry.data : null;
+    useEffect(() => {
+        defer(() => {
+            setIframeFailed(false);
+        });
+        if (!websiteUrl) return;
+        const timer = setTimeout(() => setIframeFailed(true), 4000);
+        return () => clearTimeout(timer);
+    }, [websiteUrl]);
 
     useEffect(() => {
         if (!bundleMeta?.showLocalTime) return;
         const updateTime = () => {
             const now = new Date();
-            setLocalTime(now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false}));
+            setLocalTime(now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }));
         };
         updateTime();
         const interval = setInterval(updateTime, 1000);
@@ -216,11 +231,33 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                 )}
                 {activeEntry?.type === "website" && (
                     <iframe
+                        key={websiteUrl}
                         src={activeEntry.data}
                         className="ds-iframe"
                         style={{ width: "100%", height: "100%", border: "none", position: "absolute", inset: 0, zIndex: 1, backgroundColor: "white" }}
                         allow="autoplay; fullscreen"
+                        onLoad={() => setIframeFailed(false)}
+                        onError={() => setIframeFailed(true)}
                     />
+                )}
+                {activeEntry?.type === "website" && showMissingAssetWarning && iframeFailed && (
+                    <div
+                        style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            background: "rgba(0, 0, 0, 0.45)",
+                            color: "white",
+                            padding: "0 12px",
+                            textAlign: "center",
+                            zIndex: 2,
+                            pointerEvents: "none",
+                        }}
+                    >
+                        This site failed to load — it may block being embedded, or the URL may be unreachable.
+                    </div>
                 )}
                 {activeEntry?.type === "video" && (
                     <video
