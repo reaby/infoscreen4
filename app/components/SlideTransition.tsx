@@ -36,10 +36,15 @@ export default function SlideTransition({ transitionKey, transition, children }:
         }
 
         activeLayerKeyRef.current = transitionKey;
-        setLayers((prev) => [
-            ...prev.map((l) => ({ ...l, phase: "exiting" as const })),
-            { key: transitionKey, node: children, phase: "entering" },
-        ]);
+        setLayers((prev) => {
+            // Keep at most one outgoing layer. If a transition is interrupted by
+            // another before it finished cleaning up, drop the older stale layers
+            // immediately instead of letting them pile up (each holds a live
+            // DisplaySlide — iframes/videos/canvas — so accumulating them leaks).
+            const outgoing = prev.find((l) => l.phase !== "exiting") ?? prev[prev.length - 1];
+            const base = outgoing ? [{ ...outgoing, phase: "exiting" as const }] : [];
+            return [...base, { key: transitionKey, node: children, phase: "entering" }];
+        });
 
         const raf = requestAnimationFrame(() => {
             setLayers((prev) => prev.map((l) => (l.key === transitionKey ? { ...l, phase: "active" } : l)));
