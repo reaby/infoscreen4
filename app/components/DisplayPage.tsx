@@ -72,19 +72,30 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
 
         const seq = ++loadSeqRef.current;
 
-        Promise.all([
-            hasSocketMeta
-                ? Promise.resolve(active.bundleMeta as BundleMeta)
-                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
-                    .then((r) => r.json()).catch(() => ({})),
-            hasSocketJson
-                ? Promise.resolve(active.json)
-                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
-                    .then((r) => r.json()).catch(() => null),
-        ]).then(([meta, json]) => {
+        const metaPromise = hasSocketMeta
+            ? Promise.resolve(active.bundleMeta as BundleMeta)
+            : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
+                .then((r) => r.json()).catch(() => ({}));
+
+        metaPromise.then((meta) => {
             if (loadSeqRef.current !== seq) return;
-            setBundleMeta((meta ?? {}) as BundleMeta);
-            if (json) setDisplayJson(json);
+            const resolvedMeta = (meta ?? {}) as BundleMeta;
+            setBundleMeta(resolvedMeta);
+
+            if (hasSocketJson) {
+                if (active.json) setDisplayJson(active.json as object);
+                return;
+            }
+            // Website/video slides have no fabric JSON on disk — fetching it always 400s.
+            const entryType = resolvedMeta.slides?.find((s) => s.id === active.slide)?.type;
+            if (entryType && entryType !== "fabric") return;
+
+            fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
+                .then((r) => r.json()).catch(() => null)
+                .then((json) => {
+                    if (loadSeqRef.current !== seq) return;
+                    if (json) setDisplayJson(json);
+                });
         });
     }, [state.activeSlide]);
 

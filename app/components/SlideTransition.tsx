@@ -61,7 +61,6 @@ export default function SlideTransition({ transitionKey, transition, children }:
 
     useEffect(() => {
         setLayers((prev) => prev.map((l) => (l.key === activeLayerKeyRef.current ? { ...l, node: children } : l)));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [children]);
 
     useEffect(() => () => timersRef.current.forEach(clearTimeout), []);

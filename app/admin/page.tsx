@@ -326,19 +326,32 @@ export default function AdminDashboard() {
         }
 
         const seq = ++liveLoadSeqRef.current;
-        Promise.all([
-            hasSocketMeta
-                ? Promise.resolve(active.bundleMeta)
-                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
-                    .then((r) => r.json()).catch(() => ({})),
-            hasSocketJson
-                ? Promise.resolve(active.json)
-                : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
-                    .then((r) => r.json()).catch(() => null),
-        ]).then(([meta, json]) => {
+        const metaPromise = hasSocketMeta
+            ? Promise.resolve(active.bundleMeta as BundleMeta)
+            : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
+                .then((r) => r.json()).catch(() => ({}));
+
+        metaPromise.then((meta) => {
             if (liveLoadSeqRef.current !== seq) return;
-            setLiveBundleMeta((meta ?? {}) as BundleMeta);
-            setLiveJson(json);
+            const resolvedMeta = (meta ?? {}) as BundleMeta;
+            setLiveBundleMeta(resolvedMeta);
+
+            if (hasSocketJson) {
+                setLiveJson(active.json as object | null);
+                return;
+            }
+            // Website/video slides have no fabric JSON on disk — fetching it always 400s.
+            const entryType = resolvedMeta.slides?.find((s) => s.id === active.slide)?.type;
+            if (entryType && entryType !== "fabric") {
+                setLiveJson(null);
+                return;
+            }
+            fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
+                .then((r) => r.json()).catch(() => null)
+                .then((json) => {
+                    if (liveLoadSeqRef.current !== seq) return;
+                    setLiveJson(json);
+                });
         });
     }, [selectedDisplayState]);
 
@@ -359,13 +372,21 @@ export default function AdminDashboard() {
             });
             return;
         }
+        // Website/video slides have no fabric JSON on disk — fetching it always 400s.
+        if (selectedEntry && selectedEntry.type !== "fabric") {
+            defer(() => {
+                setPreviewJson(null);
+                setLoadingPreview(false);
+            });
+            return;
+        }
         defer(() => setLoadingPreview(true));
         fetch(`/api/bundles/${encodeURIComponent(selectedBundle)}/slides/${encodeURIComponent(selectedSlide)}`)
             .then((r) => r.json())
             .then((j) => setPreviewJson(j))
             .catch(() => setPreviewJson(null))
             .finally(() => setLoadingPreview(false));
-    }, [selectedBundle, selectedSlide]);
+    }, [selectedBundle, selectedSlide, selectedEntry]);
 
     // Pushes a slide to the currently selected display immediately (used by both
     // the "show selected slide" button and the prev/next transport controls).
