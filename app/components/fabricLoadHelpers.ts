@@ -52,6 +52,18 @@ async function cleanFabricValue(value: unknown, cache: Map<string, boolean>, sta
     return value;
 }
 
+const MEDIA_SOURCE_KEYS = new Set(["src", "videoSrc"]);
+const LOCAL_MEDIA_PATH = /(\/api\/files\/(images|videos|backgrounds)\/.*)$/;
+
+/**
+ * Strips scheme/host from local media URLs so they resolve against the current
+ * origin. Fabric serializes image sources as absolute URLs, so a slide saved over
+ * http:// would otherwise keep loading http:// assets when served over https://.
+ */
+function toRelativeMediaUrl(url: string): string {
+    return url.match(LOCAL_MEDIA_PATH)?.[1] ?? url;
+}
+
 export function sanitizeCanvasJson(value: any): any {
     if (Array.isArray(value)) {
         return value.map((item) => sanitizeCanvasJson(item));
@@ -59,13 +71,8 @@ export function sanitizeCanvasJson(value: any): any {
     if (value && typeof value === "object") {
         const result: Record<string, any> = {};
         for (const [key, nestedValue] of Object.entries(value)) {
-            if (key === "src" && typeof nestedValue === "string") {
-                const match = nestedValue.match(/(\/api\/files\/(images|videos|backgrounds)\/.*)$/);
-                if (match) {
-                    result[key] = match[1];
-                } else {
-                    result[key] = nestedValue;
-                }
+            if (MEDIA_SOURCE_KEYS.has(key) && typeof nestedValue === "string") {
+                result[key] = toRelativeMediaUrl(nestedValue);
             } else {
                 result[key] = sanitizeCanvasJson(nestedValue);
             }
@@ -79,7 +86,7 @@ export async function loadFabricJsonSafely(canvas: fabric.Canvas | fabric.Static
     const stats = { missingAssets: false };
     try {
         const parsed = typeof json === "string" ? JSON.parse(json) : json;
-        const cleaned = await cleanFabricValue(parsed, new Map(), stats);
+        const cleaned = await cleanFabricValue(sanitizeCanvasJson(parsed), new Map(), stats);
         await canvas.loadFromJSON(cleaned as string | Record<string, any>);
         return { loaded: true, missingAssets: stats.missingAssets };
     } catch (error) {
