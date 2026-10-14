@@ -121,6 +121,9 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
     const [hasMissingAssets, setHasMissingAssets] = useState(false);
     const [localTime, setLocalTime] = useState("");
     const [iframeFailed, setIframeFailed] = useState(false);
+    // The iframe stays hidden until its document has loaded, so the slide
+    // background shows through instead of a blank white frame.
+    const [iframeLoaded, setIframeLoaded] = useState(false);
 
     // Sites that refuse to be framed (X-Frame-Options/CSP frame-ancestors) don't
     // reliably fire an iframe error event — they just stay blank. A load timeout
@@ -129,6 +132,7 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
     useEffect(() => {
         defer(() => {
             setIframeFailed(false);
+            setIframeLoaded(false);
         });
         if (!websiteUrl) return;
         const timer = setTimeout(() => setIframeFailed(true), 4000);
@@ -234,9 +238,22 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                         key={websiteUrl}
                         src={activeEntry.data}
                         className="ds-iframe"
-                        style={{ width: "100%", height: "100%", border: "none", position: "absolute", inset: 0, zIndex: 1, backgroundColor: "white" }}
+                        style={{
+                            width: "100%",
+                            height: "100%",
+                            border: "none",
+                            position: "absolute",
+                            inset: 0,
+                            zIndex: 1,
+                            backgroundColor: "white",
+                            opacity: iframeLoaded ? 1 : 0,
+                            transition: "opacity 300ms ease-in",
+                        }}
                         allow="autoplay; fullscreen"
-                        onLoad={() => setIframeFailed(false)}
+                        onLoad={() => {
+                            setIframeFailed(false);
+                            setIframeLoaded(true);
+                        }}
                         onError={() => setIframeFailed(true)}
                     />
                 )}
