@@ -6,6 +6,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { bundleManager } from "./app/lib/BundleManager";
 import { getDisplayConfigs, ensureDisplayId, setDisplayConfigs, DisplayConfig } from "./app/lib/displayState";
 import { resolveTransition, TransitionConfig } from "./app/lib/transitions";
+import { setContentChangedListener } from "./app/lib/contentEvents";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
@@ -275,6 +276,8 @@ app.prepare().then(() => {
     io = new SocketIOServer(httpServer, {
         cors: { origin: "*" },
     });
+
+    setContentChangedListener(() => io?.to("admins").emit("content:changed"));
 
     io.on("connection", (socket) => {
         const role: string = (socket.handshake.query.role as string) ?? "unknown";

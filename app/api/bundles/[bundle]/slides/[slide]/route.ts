@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
 import { getBundlesDir, getSlidesDir } from "@/app/lib/paths";
+import { notifyContentChanged } from "@/app/lib/contentEvents";
 
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 
@@ -49,6 +50,7 @@ export async function POST(req: Request, { params }: Ctx) {
     if (!entry) {
         bundleManager.ensureSlideEntry(bundle, "fabric", filename, undefined, id);
     }
+    notifyContentChanged();
 
     return NextResponse.json({ ok: true });
 }
@@ -57,5 +59,6 @@ export async function DELETE(_req: Request, { params }: Ctx) {
     const { bundle, slide: id } = await params;
 
     bundleManager.removeSlideEntry(bundle, id);
+    notifyContentChanged();
     return NextResponse.json({ ok: true });
 }

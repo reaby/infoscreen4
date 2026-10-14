@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { bundleManager } from "@/app/lib/BundleManager";
 import type { BundleMeta } from "@/app/interfaces/BundleMeta";
+import { notifyContentChanged } from "@/app/lib/contentEvents";
 
 const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
 
@@ -29,6 +30,7 @@ export async function PATCH(
     }
 
     const replaced = bundleManager.replaceMeta(bundle, body as Partial<BundleMeta>);
+    notifyContentChanged();
     return NextResponse.json(replaced);
 }
 
@@ -54,6 +56,7 @@ export async function POST(
 
     try {
         await fs.rename(oldPath, newPath);
+        notifyContentChanged();
         return NextResponse.json({ success: true, newName: body.newName });
     } catch (e: any) {
         return NextResponse.json({ error: e.message || "Rename failed" }, { status: 500 });
@@ -77,6 +80,7 @@ export async function DELETE(
     const bundlePath = path.join(getBundlesDir(), bundle);
     try {
         await fs.rm(bundlePath, { recursive: true, force: true });
+        notifyContentChanged();
         return NextResponse.json({ success: true });
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 });

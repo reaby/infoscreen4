@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readdir, mkdir } from "fs/promises";
 import path from "path";
 import { getBundlesDir } from "@/app/lib/paths";
+import { notifyContentChanged } from "@/app/lib/contentEvents";
 
 const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
 
@@ -25,5 +26,6 @@ export async function POST(req: Request) {
     }
     const target = path.join(bundlesDir, name, "slides");
     await mkdir(target, { recursive: true });
+    notifyContentChanged();
     return NextResponse.json({ name });
 }

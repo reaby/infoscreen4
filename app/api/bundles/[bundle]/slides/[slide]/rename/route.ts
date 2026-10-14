@@ -3,6 +3,7 @@ import { rename } from "fs/promises";
 import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
 import { getSlidesDir } from "@/app/lib/paths";
+import { notifyContentChanged } from "@/app/lib/contentEvents";
 
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 
@@ -35,6 +36,7 @@ export async function POST(req: Request, { params }: Ctx) {
     } else {
         bundleManager.renameSlideEntry(bundle, id, newName);
     }
+    notifyContentChanged();
 
     return NextResponse.json({ ok: true });
 }

@@ -287,6 +287,40 @@ export default function AdminDashboard() {
             .catch(() => { setBundleMeta({}); setMetaDraft({}); });
     }, [selectedBundle]);
 
+    const refreshSelectedBundleMeta = useCallback(async () => {
+        if (!selectedBundle) return;
+        const fresh: BundleMeta | null = await fetch(`/api/bundles/${encodeURIComponent(selectedBundle)}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+        if (!fresh) return;
+        const previous = bundleMetaRef.current;
+        bundleMetaRef.current = fresh;
+        setBundleMeta(fresh);
+        // Only follow the server when the settings draft has no unsaved edits.
+        setMetaDraft((draft) => (JSON.stringify(draft) === JSON.stringify(previous) ? fresh : draft));
+    }, [selectedBundle]);
+
+    // Bundles and slides may be changed by other admins or in the editor;
+    // the server announces it so this view stays current without a reload.
+    useEffect(() => {
+        const socket = socketRef.current;
+        if (!socket) return;
+        let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+        const onContentChanged = () => {
+            // Some actions (e.g. copying a bundle) fire many changes in a row.
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                void loadBundles();
+                void refreshSelectedBundleMeta();
+            }, 250);
+        };
+        socket.on("content:changed", onContentChanged);
+        return () => {
+            clearTimeout(debounceTimer);
+            socket.off("content:changed", onContentChanged);
+        };
+    }, [connected, socketRef, loadBundles, refreshSelectedBundleMeta]);
+
     const saveMeta = useCallback(async (patch: Partial<BundleMeta>) => {
         if (!selectedBundle) return;
         const updated = { ...bundleMetaRef.current, ...patch };
