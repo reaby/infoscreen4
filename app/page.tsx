@@ -11,7 +11,7 @@ type ApiResult = {
     message?: string;
 };
 
-const emptyForm = { username: "", password: "" };
+const emptyForm = { username: "", password: "", setupCode: "" };
 
 export default function Home() {
     const [form, setForm] = useState(emptyForm);
@@ -71,7 +71,7 @@ export default function Home() {
         return () => document.removeEventListener("visibilitychange", handleVisibility);
     }, [refreshDisplayOptions]);
 
-    const updateField = (field: "username" | "password", value: string) => {
+    const updateField = (field: keyof typeof emptyForm, value: string) => {
         setForm((current) => ({ ...current, [field]: value }));
     };
 
@@ -92,7 +92,7 @@ export default function Home() {
             const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify(isRegister ? { username, password, setupCode: form.setupCode } : { username, password }),
             });
             const result = (await response.json()) as ApiResult;
 
@@ -184,7 +184,20 @@ export default function Home() {
                                 disabled={working}
                             />
                         </label>
-                        {status && <div className={`home-status ${status.type}`}>{status.text}</div>}
+                        {isRegister && (
+                            <label className="auth-label">
+                                Setup code (shown in the server console)
+                                <input
+                                    className="auth-input"
+                                    type="text"
+                                    autoComplete="off"
+                                    value={form.setupCode}
+                                    onChange={(event) => updateField("setupCode", event.target.value)}
+                                    disabled={working}
+                                />
+                            </label>
+                        )}
+                        {status &&<div className={`home-status ${status.type}`}>{status.text}</div>}
                         <button className="home-btn home-btn-primary" type="submit" disabled={working}>
                             {isRegister ? "Create account" : "Sign in"}
                         </button>

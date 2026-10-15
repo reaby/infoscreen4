@@ -1,4 +1,4 @@
-import { createServer as createHttpServer } from "http";
+import { createServer as createHttpServer, IncomingMessage, ServerResponse } from "http";
 import { createServer as createHttpsServer } from "https";
 import { readFileSync, existsSync } from "fs";
 import next from "next";
@@ -8,6 +8,9 @@ import { getDisplayConfigs, ensureDisplayId, setDisplayConfigs, DisplayConfig } 
 import { resolveTransition, TransitionConfig } from "./app/lib/transitions";
 import { setContentChangedListener } from "./app/lib/contentEvents";
 import { isAllowedOrigin, resolveSocketRole, SocketRole } from "./app/lib/socketAuth";
+import { CLIENT_ADDRESS_HEADER } from "./app/lib/clientAddress";
+import { getAllUsers } from "./app/lib/auth";
+import { getOrCreateSetupCode } from "./app/lib/setupCode";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
@@ -283,12 +286,17 @@ const app = next({ dev, turbopack: dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
+    const handleWithClientAddress = (req: IncomingMessage, res: ServerResponse) => {
+        req.headers[CLIENT_ADDRESS_HEADER] = req.socket.remoteAddress ?? "unknown";
+        return handle(req, res);
+    };
+
     const httpServer = useHttps
         ? createHttpsServer(
               { key: readFileSync(sslKey), cert: readFileSync(sslCert) },
-              (req, res) => handle(req, res)
+              handleWithClientAddress
           )
-        : createHttpServer((req, res) => handle(req, res));
+        : createHttpServer(handleWithClientAddress);
 
     io = new SocketIOServer(httpServer, {
         allowRequest: (req, callback) => callback(null, isAllowedOrigin(req)),
@@ -568,6 +576,10 @@ app.prepare().then(() => {
             console.log(`> Running HTTP only — WebRTC screen/camera capture requires HTTPS on non-localhost origins.`);
             console.log(`> To enable HTTPS, generate key.pem + cert.pem in the project root (see README).`);
         }
+
+        getAllUsers().then((users) => {
+            if (users.length === 0) getOrCreateSetupCode();
+        });
 
         // Boot active bundles for all displays
         for (const config of displayConfigs) {

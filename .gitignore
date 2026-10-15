@@ -49,5 +49,6 @@ docs/_site
 docs/.jekyll-cache
 docs/Gemfile.lock
 
-# server-side login sessions
+# user accounts and login sessions (runtime data)
 data/sessions.json
+data/users.json

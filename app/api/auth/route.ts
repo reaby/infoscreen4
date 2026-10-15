@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createUser, getAllUsers, getUserByUsername, validateUser } from "../../lib/auth";
+import { getAllUsers, getUserByUsername, validateUser } from "../../lib/auth";
 import { getRequestUser } from "../../lib/authorization";
+import { getClientAddress } from "../../lib/clientAddress";
+import { clearFailedLogins, getLockoutSeconds, recordFailedLogin } from "../../lib/loginThrottle";
 import { createSession, destroySession, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "../../lib/session";
 
 function getCookieOptions(req: NextRequest) {
@@ -39,21 +41,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: "Username and password are required." }, { status: 400 });
     }
 
-    const existingUsers = await getAllUsers();
-    if (existingUsers.length === 0) {
-        const normalized = await createUser(username, password, "admin");
-        return signedInResponse(
-            req,
-            { authenticated: true, username: normalized, role: "admin", created: true, message: "First user created and signed in." },
-            normalized
+    const clientAddress = getClientAddress(req);
+    const lockoutSeconds = getLockoutSeconds(clientAddress, username);
+    if (lockoutSeconds > 0) {
+        return NextResponse.json(
+            { message: `Too many failed attempts. Try again in ${lockoutSeconds} seconds.` },
+            { status: 429, headers: { "Retry-After": String(lockoutSeconds) } }
         );
     }
 
     const isValid = await validateUser(username, password);
     if (!isValid) {
+        recordFailedLogin(clientAddress, username);
         return NextResponse.json({ message: "Invalid username or password." }, { status: 401 });
     }
 
+    clearFailedLogins(clientAddress, username);
     const user = await getUserByUsername(username);
     return signedInResponse(req, { authenticated: true, username, role: user?.role ?? "admin" }, username);
 }
