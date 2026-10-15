@@ -2,6 +2,8 @@
 
 <a href="https://discord.gg/Ru59wMVDyd"><img alt="Discord" src="https://img.shields.io/discord/1173060772956479488?label=Discord&logo=discord&logoColor=fff"></a>
 
+📖 **Documentation:** https://reaby.github.io/infoscreen4/
+
 ## 1. Introduction
 
 Infoscreen4 for LAN parties. It combines a fast admin experience with real-time display updates, so you can create and publish content to multiple screens from one place.
