@@ -14,7 +14,8 @@ export async function GET(req: Request) {
     try {
         await mkdir(fontsDir, { recursive: true });
         const files = await readdir(fontsDir);
-        return NextResponse.json(files.filter((f) => !f.startsWith(".")));
+        const fontFiles = files.filter((f) => ALLOWED_EXT.has(path.extname(f).slice(1).toLowerCase()));
+        return NextResponse.json(fontFiles);
     } catch {
         return NextResponse.json([]);
     }
