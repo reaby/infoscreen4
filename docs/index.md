@@ -13,7 +13,7 @@ A real-time infoscreen system for LAN parties. Build slides in the browser and p
 [Get started](getting-started/installation){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [View on GitHub](https://github.com/reaby/infoscreen4){: .btn .fs-5 .mb-4 .mb-md-0 }
 
-![Infoscreen4](assets/images/infoscreen4.png)
+![Infoscreen4]({{ '/assets/images/infoscreen4.png' | relative_url }})
 
 ---
 

@@ -22,14 +22,17 @@ Stream a camera or a screen from any browser to any display. Video travels peer-
 
 1. Open `/send` and sign in.
 2. Enter a **Stream name**.
-3. Choose a camera (front or back on phones) or screen sharing.
-4. Optionally pick a **Target bitrate** and enable **Include microphone audio**.
-5. Start the stream.
+3. Optionally choose the **Resolution**, **FPS** and **Target bitrate**, and tick **Include microphone audio**.
+4. Click **Share Screen** or **Use Camera**. On phones you can switch between the front and back camera.
 
-The stream now appears in the admin's **Live Streams** panel.
+![The stream sender page]({{ '/assets/images/screenshots/send.png' | relative_url }})
+
+The stream now appears in the admin's **Streams** tab.
 
 ## Show a stream on a display
 
-In `/admin`, select the display, open **Live Streams** and pick the stream. It covers the slides until you clear it or the sender stops.
+In `/admin`, select the display, open the **Streams** tab and click **Show on display**. The stream covers the slides until you click **Clear** or the sender stops.
+
+![Live streams in the admin]({{ '/assets/images/screenshots/streams.png' | relative_url }})
 
 The target bitrate is best effort. The actual quality depends on the browser and the network.

@@ -6,7 +6,9 @@ nav_order: 6
 
 # Users and roles
 
-Manage accounts in the admin under the **user menu → User management**. Accounts are stored in `data/users.json`.
+Manage accounts in the admin under the **user menu → Users**. Accounts are stored in `data/users.json`.
+
+![User management]({{ '/assets/images/screenshots/users.png' | relative_url }})
 
 | Role | Can do |
 |:--|:--|

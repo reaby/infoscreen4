@@ -12,7 +12,9 @@ nav_order: 4
 
 ## Display IDs
 
-Displays are listed in `data/display.json`. Add, rename or remove them in the admin under **Display settings → Display configuration**.
+Displays are listed in `data/display.json`. Add, rename or remove them in the admin's **Displays** tab, then click **Save**.
+
+![Display configuration]({{ '/assets/images/screenshots/display-settings.png' | relative_url }})
 
 Each screen opens:
 
@@ -27,6 +29,10 @@ For example: `/display/display-1`.
 - Several browsers can open the same ID. They all show the same content, which is useful for mirrored screens.
 
 The admin shows how many clients are connected to each display.
+
+A display shows only the slide content, full-screen:
+
+![A display client showing a slide]({{ '/assets/images/screenshots/display.png' | relative_url }})
 
 ## Kiosk setup
 

@@ -70,7 +70,11 @@ On first start there are no user accounts, and the server prints a one-time setu
 > No users exist yet. Initial setup code: 3F9A12C4
 ```
 
-Open `http://<server-ip>:3000/`, choose a username and password, and enter the setup code. This creates the first admin account. With Docker, run `docker compose logs app` to see the code.
+Open `http://<server-ip>:3000/`. Because no users exist yet, the page shows **Create account** with an extra **Setup code** field. Choose a username and password, and enter the setup code. This creates the first admin account. With Docker, run `docker compose logs app` to see the code.
+
+After that, the page shows the normal sign-in form:
+
+![The sign-in page]({{ '/assets/images/screenshots/login.png' | relative_url }})
 
 See [Users and roles](../guide/users) to add more accounts.
 

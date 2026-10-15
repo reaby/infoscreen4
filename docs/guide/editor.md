@@ -7,7 +7,9 @@ nav_order: 2
 # Slide editor
 {: .no_toc }
 
-The editor (`/admin/editor`) is a visual canvas built on Fabric.js. Slides are saved as JSON files in `data/slides/`.
+The editor (`/admin/editor`) is a visual canvas built on Fabric.js. Slides are saved as JSON files in `data/slides/`. Open it with **Create new slide**, or select a slide in the admin and click **Edit slide**.
+
+![The slide editor with a text object selected]({{ '/assets/images/screenshots/editor.png' | relative_url }})
 
 1. TOC
 {:toc}
@@ -30,7 +32,9 @@ Editor slides are shared. If a slide is used in several bundles, saving it chang
 
 ## Keyboard shortcuts
 
-Click **Shortcut help** in the toolbar to see these in the editor.
+Click **Shortcut help** (the **?** button) in the toolbar to see these in the editor.
+
+![Keyboard shortcut help]({{ '/assets/images/screenshots/editor-shortcuts.png' | relative_url }})
 
 ### Navigation
 
