@@ -7,6 +7,7 @@ type ApiResult = {
     authenticated?: boolean;
     username?: string | null;
     role?: string | null;
+    needsSetup?: boolean;
     message?: string;
 };
 
@@ -44,16 +45,14 @@ export default function Home() {
     }, []);
 
     useEffect(() => {
-        fetch("/api/users").then((response) => response.json()).then((data) => {
-            if (data.length == 0) setIsRegister(true);
-        });
-
         fetch("/api/auth")
             .then((response) => response.json())
             .then((data: ApiResult) => {
                 if (data.authenticated && data.username) {
                     setLoggedInUser(data.username);
                     setUserRole(data.role ?? null);
+                } else if (data.needsSetup) {
+                    setIsRegister(true);
                 }
             })
             .catch(() => null);

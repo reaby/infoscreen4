@@ -48,3 +48,6 @@ next-env.d.ts
 docs/_site
 docs/.jekyll-cache
 docs/Gemfile.lock
+
+# server-side login sessions
+data/sessions.json
