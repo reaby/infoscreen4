@@ -64,10 +64,18 @@ pm2 save
 
 ## First login
 
-Open `/admin` and sign in.
+On first start there are no user accounts, and the server prints a one-time setup code:
 
-- If `data/users.json` contains no users, the first username and password you enter **becomes the first admin account**.
-- The repository ships with demo accounts (`admin` / `admin` and `user` / `user`). **Delete them, or replace them with your own, before the event.** See [Users and roles](../guide/users).
+```
+> No users exist yet. Initial setup code: 3F9A12C4
+```
+
+Open `http://<server-ip>:3000/`, choose a username and password, and enter the setup code. This creates the first admin account. With Docker, run `docker compose logs app` to see the code.
+
+See [Users and roles](../guide/users) to add more accounts.
+
+{: .note }
+**Upgrading from an older version?** `data/users.json` is no longer tracked in git. Back it up before you `git pull`. If the pull deletes it, copy your backup back.
 
 ## Connect a screen
 

@@ -111,7 +111,17 @@ Editor slides, in Fabric.js canvas JSON format. These are global: any bundle can
 }
 ```
 
-`role` is `admin` or `streamer`. Passwords are stored in plain text.
+`role` is `admin` or `streamer`. Passwords are stored in plain text. This file is not tracked in git.
+
+## `sessions.json`
+
+Active sign-in sessions, managed by the server. Each key is a session token:
+
+```json
+{ "9f2c…": { "username": "admin", "expiresAt": 1792540800000 } }
+```
+
+Delete this file (with the server stopped) to sign everyone out.
 
 ## `fonts/google-fonts.json`
 

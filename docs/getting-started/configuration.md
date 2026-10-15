@@ -23,6 +23,7 @@ Set these in `.env` (loaded by `pnpm run dev` / `pnpm run start`) or through you
 | `SSL_CERT` | `cert.pem` | Path to the TLS certificate. |
 | `INFOSCREEN_ROOT` | current directory | Project root override. `data/` is resolved relative to this. |
 | `INFOSCREEN_DATA_DIR` | `<root>/data` | Absolute data directory. Takes precedence over `INFOSCREEN_ROOT`. |
+| `ALLOWED_ORIGINS` | — | Comma-separated extra origins allowed to open socket connections, e.g. `https://screens.example.com`. Only needed when the browser's address differs from the host the server sees. |
 
 {: .note }
 `data/users.json` and `data/display.json` are always read relative to the server's working directory, even if `INFOSCREEN_ROOT` or `INFOSCREEN_DATA_DIR` is set.
@@ -51,6 +52,22 @@ You can also terminate TLS in a reverse proxy (nginx, Caddy, Traefik) and run In
 
 - forward WebSocket upgrades for `/socket.io/`
 - set `X-Forwarded-Proto: https`, so the session cookie is marked `Secure`
+- pass the original `Host` header, or set `X-Forwarded-Host`, so socket connections pass the origin check. Otherwise, add the public address to `ALLOWED_ORIGINS`.
+
+Example for nginx:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+See [Security](../reference/security) before exposing the server to the internet.
 
 ## Data directory
 
@@ -65,7 +82,8 @@ data/
 ├── backgrounds/                 # bundle background images/videos
 ├── fonts/                       # uploaded fonts + google-fonts.json
 ├── display.json                 # display list and active bundle per display
-└── users.json                   # user accounts
+├── users.json                   # user accounts (not tracked in git)
+└── sessions.json                # active sign-in sessions (not tracked in git)
 ```
 
 To back up Infoscreen4, copy this directory. See [Data format](../reference/data-format) for the file schemas.

@@ -39,7 +39,7 @@ Infoscreen4 runs as one Node.js server on your LAN. Each screen opens a browser 
 - [Configuration](getting-started/configuration): environment variables, HTTPS and the data directory.
 - [Admin guide](guide/admin): displays, bundles, playback and announcements.
 - [Slide editor](guide/editor): build slides and learn the keyboard shortcuts.
-- [Security](reference/security): **read this before exposing the server beyond a trusted LAN.**
+- [Security](reference/security): access model, and what to do before you run Infoscreen4 on the internet.
 
 ## Tech stack
 

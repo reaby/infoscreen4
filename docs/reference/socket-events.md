@@ -13,7 +13,13 @@ Real-time communication uses Socket.IO on the same port as the web server. Clien
 io({ query: { role: "display", displayId: "display-1" } });
 ```
 
-Roles: `display`, `admin`, `streamer`. Any client can also watch streams.
+| Role | Requirement |
+|:--|:--|
+| `display` | None. Receive-only. |
+| `admin` | Session cookie of an admin user. |
+| `streamer` | Session cookie of any user. |
+
+Connections with any other role, a missing or invalid session, or a foreign `Origin` header are rejected with a connect error.
 
 1. TOC
 {:toc}
@@ -64,6 +70,8 @@ Admins join the `admins` room.
 | `content:changed` | Bundles or slides changed on disk; reload lists. |
 
 ## Streaming (WebRTC signaling)
+
+Admins may watch any stream. A display may only watch the stream assigned to it with `stream:show`. `stream:signal` is only relayed between a streamer and the viewers of its stream.
 
 | Event | Direction | Payload |
 |:--|:--|:--|

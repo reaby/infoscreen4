@@ -5,8 +5,14 @@ nav_order: 2
 ---
 
 # REST API
+{: .no_toc }
 
 The admin interface uses these HTTP endpoints. They are internal and may change between versions.
+
+1. TOC
+{:toc}
+
+## Endpoints
 
 | Endpoint | Methods | Purpose |
 |:--|:--|:--|
@@ -31,13 +37,41 @@ The admin interface uses these HTTP endpoints. They are internal and may change 
 | `/api/google-fonts` | `GET` `POST` | List and add Google Font families |
 | `/api/google-fonts/[family]` | `DELETE` | Remove a Google Font family |
 
+## Access
+
+All endpoints require an **admin** session, except:
+
+| Public endpoint | Why |
+|:--|:--|
+| `GET` `POST` `DELETE /api/auth` | Signing in and out |
+| `GET /api/displays` | Display picker on the start page |
+| `GET /api/bundles/[bundle]` | Bundle settings for display clients |
+| `GET /api/bundles/[bundle]/slides/[slide]` | Slide content for display clients |
+| `GET /api/files/*/[file]` | Media served to display clients |
+| `GET /api/fonts` | Fonts for display clients |
+| `POST /api/users` | Only while no users exist, with the setup code |
+
+Requests without a valid session get `401`. Requests from a signed-in user with the wrong role get `403`.
+
 ## Authentication
 
-`POST /api/auth` with `{ "username": "...", "password": "..." }` sets an HTTP-only `session` cookie that is valid for 7 days. `GET /api/auth` returns:
+`POST /api/auth` with `{ "username": "...", "password": "..." }` sets an HTTP-only `session` cookie holding a random token, valid for 7 days. After 5 failed attempts it returns `429` with a `Retry-After` header.
+
+`GET /api/auth` returns:
 
 ```json
 { "authenticated": true, "username": "admin", "role": "admin" }
 ```
 
-{: .warning }
-Only `/api/auth` checks the session. The other endpoints do not enforce authentication. See [Security](security).
+or, when not signed in:
+
+```json
+{ "authenticated": false, "needsSetup": false }
+```
+
+`needsSetup` is `true` when no users exist yet. Create the first admin with:
+
+```http
+POST /api/users
+{ "username": "...", "password": "...", "setupCode": "<code from the server console>" }
+```
