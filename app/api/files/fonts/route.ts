@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { readdir, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { getFontsDir } from "@/app/lib/paths";
@@ -6,18 +7,23 @@ import { getFontsDir } from "@/app/lib/paths";
 const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 const ALLOWED_EXT = new Set(["woff", "woff2", "ttf", "otf"]);
 
-export async function GET() {
+export async function GET(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const fontsDir = getFontsDir();
     try {
         await mkdir(fontsDir, { recursive: true });
         const files = await readdir(fontsDir);
-        return NextResponse.json(files.filter((f) => !f.startsWith(".")));
+        const fontFiles = files.filter((f) => ALLOWED_EXT.has(path.extname(f).slice(1).toLowerCase()));
+        return NextResponse.json(fontFiles);
     } catch {
         return NextResponse.json([]);
     }
 }
 
 export async function POST(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const fontsDir = getFontsDir();
     const ct = req.headers.get("content-type") ?? "";
     if (!ct.includes("multipart/form-data")) {

@@ -1,6 +1,7 @@
 "use client";
 
 import * as fabric from "fabric";
+import { preloadFabricFonts } from "./fabricFonts";
 
 type FabricJsonInput = object | string;
 
@@ -87,6 +88,7 @@ export async function loadFabricJsonSafely(canvas: fabric.Canvas | fabric.Static
     try {
         const parsed = typeof json === "string" ? JSON.parse(json) : json;
         const cleaned = await cleanFabricValue(sanitizeCanvasJson(parsed), new Map(), stats);
+        await preloadFabricFonts(cleaned);
         await canvas.loadFromJSON(cleaned as string | Record<string, any>);
         return { loaded: true, missingAssets: stats.missingAssets };
     } catch (error) {

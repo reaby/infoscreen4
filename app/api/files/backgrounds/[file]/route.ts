@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { readFile, unlink, rename, stat, open } from "fs/promises";
 import path from "path";
 import { getBackgroundsDir } from "@/app/lib/paths";
@@ -89,9 +90,11 @@ export async function GET(
 }
 
 export async function DELETE(
-    _req: Request,
+    req: Request,
     { params }: { params: Promise<{ file: string }> }
 ) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { file } = await params;
     const filePath = safePath(file);
     if (!filePath) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
@@ -107,6 +110,8 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ file: string }> }
 ) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { file } = await params;
     const filePath = safePath(file);
     if (!filePath) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });

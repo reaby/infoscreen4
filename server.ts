@@ -1,4 +1,4 @@
-import { createServer as createHttpServer } from "http";
+import { createServer as createHttpServer, IncomingMessage, ServerResponse } from "http";
 import { createServer as createHttpsServer } from "https";
 import { readFileSync, existsSync } from "fs";
 import next from "next";
@@ -7,6 +7,10 @@ import { bundleManager } from "./app/lib/BundleManager";
 import { getDisplayConfigs, ensureDisplayId, setDisplayConfigs, DisplayConfig } from "./app/lib/displayState";
 import { resolveTransition, TransitionConfig } from "./app/lib/transitions";
 import { setContentChangedListener } from "./app/lib/contentEvents";
+import { isAllowedOrigin, resolveSocketRole, SocketRole } from "./app/lib/socketAuth";
+import { CLIENT_ADDRESS_HEADER } from "./app/lib/clientAddress";
+import { getAllUsers } from "./app/lib/auth";
+import { getOrCreateSetupCode } from "./app/lib/setupCode";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
@@ -262,25 +266,53 @@ function cleanupStream(streamId: string, streamerSocketId: string) {
     emitAdminStreams();
 }
 
+/** Admins may preview any stream; a display may only watch the stream assigned to it. */
+function canWatchStream(role: SocketRole, displayId: string, streamId: string): boolean {
+    if (role === "admin") return true;
+    if (role === "display") return displayActiveStream.get(displayId) === streamId;
+    return false;
+}
+
+/** Signals may only flow between a streamer and a viewer watching that streamer's stream. */
+function canSignal(fromSocketId: string, toSocketId: string): boolean {
+    const watchedStreamId = socketToWatchedStream.get(fromSocketId);
+    if (watchedStreamId && streams.get(watchedStreamId)?.socketId === toSocketId) return true;
+
+    const ownStreamId = socketToStream.get(fromSocketId);
+    return !!ownStreamId && socketToWatchedStream.get(toSocketId) === ownStreamId;
+}
+
 const app = next({ dev, turbopack: dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
+    const handleWithClientAddress = (req: IncomingMessage, res: ServerResponse) => {
+        req.headers[CLIENT_ADDRESS_HEADER] = req.socket.remoteAddress ?? "unknown";
+        return handle(req, res);
+    };
+
     const httpServer = useHttps
         ? createHttpsServer(
               { key: readFileSync(sslKey), cert: readFileSync(sslCert) },
-              (req, res) => handle(req, res)
+              handleWithClientAddress
           )
-        : createHttpServer((req, res) => handle(req, res));
+        : createHttpServer(handleWithClientAddress);
 
     io = new SocketIOServer(httpServer, {
-        cors: { origin: "*" },
+        allowRequest: (req, callback) => callback(null, isAllowedOrigin(req)),
+    });
+
+    io.use(async (socket, next) => {
+        const role = await resolveSocketRole(socket);
+        if (!role) return next(new Error("unauthorized"));
+        socket.data.role = role;
+        next();
     });
 
     setContentChangedListener(() => io?.to("admins").emit("content:changed"));
 
     io.on("connection", (socket) => {
-        const role: string = (socket.handshake.query.role as string) ?? "unknown";
+        const role: SocketRole = socket.data.role;
         const requestedDisplayId = (socket.handshake.query.displayId as string) ?? "1";
         const displayId = ensureDisplayId(requestedDisplayId);
 
@@ -454,6 +486,8 @@ app.prepare().then(() => {
         // --- WebRTC streaming signaling ---
         if (role === "streamer") {
             socket.on("stream:register", (data: { streamId: string; name: string }) => {
+                const existing = streams.get(data.streamId);
+                if (existing && existing.socketId !== socket.id) return; // don't let another socket take over a stream
                 const info: StreamInfo = { streamId: data.streamId, name: data.name, socketId: socket.id };
                 streams.set(data.streamId, info);
                 socketToStream.set(socket.id, data.streamId);
@@ -461,6 +495,7 @@ app.prepare().then(() => {
             });
 
             socket.on("stream:unregister", (data: { streamId: string }) => {
+                if (streams.get(data.streamId)?.socketId !== socket.id) return;
                 cleanupStream(data.streamId, socket.id);
             });
 
@@ -470,10 +505,11 @@ app.prepare().then(() => {
             });
         }
 
-        // Signal relay — any role can send/receive signals
+        // Signal relay between a streamer and its viewers
         socket.on("stream:watch", (data: { streamId: string }) => {
             const stream = streams.get(data.streamId);
             if (!stream) return;
+            if (!canWatchStream(role, displayId, data.streamId)) return;
 
             const previousStreamId = socketToWatchedStream.get(socket.id);
             if (previousStreamId && previousStreamId !== data.streamId) {
@@ -498,6 +534,7 @@ app.prepare().then(() => {
         });
 
         socket.on("stream:signal", (data: { to: string; data: unknown }) => {
+            if (typeof data?.to !== "string" || !canSignal(socket.id, data.to)) return;
             io?.to(data.to).emit("stream:signal", { from: socket.id, data: data.data });
         });
 
@@ -539,6 +576,10 @@ app.prepare().then(() => {
             console.log(`> Running HTTP only — WebRTC screen/camera capture requires HTTPS on non-localhost origins.`);
             console.log(`> To enable HTTPS, generate key.pem + cert.pem in the project root (see README).`);
         }
+
+        getAllUsers().then((users) => {
+            if (users.length === 0) getOrCreateSetupCode();
+        });
 
         // Boot active bundles for all displays
         for (const config of displayConfigs) {

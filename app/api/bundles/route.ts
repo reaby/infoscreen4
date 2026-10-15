@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { readdir, mkdir } from "fs/promises";
 import path from "path";
 import { getBundlesDir } from "@/app/lib/paths";
@@ -6,7 +7,9 @@ import { notifyContentChanged } from "@/app/lib/contentEvents";
 
 const NAME_RE = /^[a-zA-Z0-9_\- ]+$/;
 
-export async function GET() {
+export async function GET(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const bundlesDir = getBundlesDir();
     try {
         const entries = await readdir(bundlesDir, { withFileTypes: true });
@@ -18,6 +21,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const bundlesDir = getBundlesDir();
     const body = await req.json().catch(() => null);
     const name: unknown = body?.name;

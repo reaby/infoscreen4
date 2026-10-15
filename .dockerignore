@@ -8,3 +8,4 @@ README.md
 *.log
 *.pem
 .env
+docs

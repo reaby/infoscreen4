@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { getVideosDir } from "@/app/lib/paths";
@@ -19,7 +20,9 @@ async function readDuration(videosDir: string, filename: string): Promise<number
     }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const videosDir = getVideosDir();
     try {
         await mkdir(videosDir, { recursive: true });
@@ -35,6 +38,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const videosDir = getVideosDir();
     const ct = req.headers.get("content-type") ?? "";
     if (!ct.includes("multipart/form-data")) {
