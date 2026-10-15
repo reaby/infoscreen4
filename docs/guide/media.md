@@ -30,6 +30,8 @@ For background and slide videos, use H.264 MP4 at the display's resolution. It p
 
 Open **Manage fonts** in the editor.
 
+![The Font Manager]({{ '/assets/images/screenshots/font-manager.png' | relative_url }})
+
 - **Custom fonts**: upload `.ttf`, `.otf`, `.woff` or `.woff2` files.
 - **Google Fonts**: add a family by its name. It becomes available in the editor and on all displays. The list is stored in `data/fonts/google-fonts.json`.
 - **Built-in fonts**: a set of common fonts that is always available.
