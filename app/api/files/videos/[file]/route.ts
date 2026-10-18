@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { authorize } from "@/app/lib/authorization";
-import { readFile, writeFile, unlink, rename, stat, open } from "fs/promises";
+import { writeFile, unlink, rename, stat } from "fs/promises";
 import path from "path";
 import { getVideosDir } from "@/app/lib/paths";
+import { isRangeStillValid, notModifiedResponse, validatorHeaders } from "@/app/lib/fileValidators";
+import { streamFile } from "@/app/lib/fileStream";
 
 const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 
@@ -38,11 +40,13 @@ export async function GET(
 
     try {
         const info = await stat(filePath);
+        const notModified = notModifiedResponse(req, info);
+        if (notModified) return notModified;
         const total = info.size;
         const mime = mimeFor(file);
 
         const range = req.headers.get("range");
-        if (range && range.startsWith("bytes=")) {
+        if (range && range.startsWith("bytes=") && isRangeStillValid(req, info)) {
             const raw = range.replace("bytes=", "");
             const [startRaw, endRaw] = raw.split("-");
             const start = Number(startRaw);
@@ -58,33 +62,26 @@ export async function GET(
                 });
             }
 
-            const chunkSize = end - start + 1;
-            const handle = await open(filePath, "r");
-            try {
-                const chunk = Buffer.alloc(chunkSize);
-                await handle.read(chunk, 0, chunkSize, start);
-                return new NextResponse(chunk, {
-                    status: 206,
-                    headers: {
-                        "Content-Type": mime,
-                        "Content-Length": String(chunkSize),
-                        "Content-Range": `bytes ${start}-${end}/${total}`,
-                        "Accept-Ranges": "bytes",
-                        "Cache-Control": "public, max-age=3600",
-                    },
-                });
-            } finally {
-                await handle.close();
-            }
+            return new NextResponse(streamFile(filePath, start, end), {
+                status: 206,
+                headers: {
+                    "Content-Type": mime,
+                    "Content-Length": String(end - start + 1),
+                    "Content-Range": `bytes ${start}-${end}/${total}`,
+                    "Accept-Ranges": "bytes",
+                    "Cache-Control": "public, max-age=3600",
+                    ...validatorHeaders(info),
+                },
+            });
         }
 
-        const buf = await readFile(filePath);
-        return new NextResponse(buf, {
+        return new NextResponse(streamFile(filePath), {
             headers: {
                 "Content-Type": mime,
                 "Content-Length": String(info.size),
                 "Accept-Ranges": "bytes",
                 "Cache-Control": "public, max-age=3600",
+                ...validatorHeaders(info),
             },
         });
     } catch {

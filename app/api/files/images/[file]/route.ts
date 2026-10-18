@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authorize } from "@/app/lib/authorization";
 import { readFile, unlink, rename, stat } from "fs/promises";
 import path from "path";
+import { notModifiedResponse, validatorHeaders } from "@/app/lib/fileValidators";
 
 const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 const IMAGES_DIR = process.env.INFOSCREEN_DATA_DIR
@@ -26,7 +27,7 @@ function safePath(file: string): string | null {
 }
 
 export async function GET(
-    _req: Request,
+    req: Request,
     { params }: { params: Promise<{ file: string }> }
 ) {
     const { file } = await params;
@@ -35,6 +36,8 @@ export async function GET(
 
     try {
         const info = await stat(filePath);
+        const notModified = notModifiedResponse(req, info);
+        if (notModified) return notModified;
         const buf = await readFile(filePath);
         const mime = mimeFor(file);
         return new NextResponse(buf, {
@@ -42,6 +45,7 @@ export async function GET(
                 "Content-Type": mime,
                 "Content-Length": String(info.size),
                 "Cache-Control": "public, max-age=3600",
+                ...validatorHeaders(info),
             },
         });
     } catch {

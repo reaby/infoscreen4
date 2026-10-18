@@ -368,10 +368,16 @@ export default function AdminDashboard() {
         updateBundleMeta(selectedBundle, updated);
     }, [selectedBundle, updateBundleMeta]);
 
+    // Every state:sync delivers a fresh display state object, so the live view is keyed
+    // on its values — otherwise each server broadcast would refetch the same slide.
+    const liveBundle = selectedDisplayState?.bundle ?? null;
+    const liveSlide = selectedDisplayState?.slide ?? null;
+    const liveSocketJson = selectedDisplayState?.json;
+    const liveSocketMeta = selectedDisplayState?.bundleMeta;
+
     // Fetch live JSON + live bundle metadata whenever the active broadcast slide changes
     useEffect(() => {
-        const active = selectedDisplayState;
-        if (!active) {
+        if (!liveBundle || !liveSlide) {
             defer(() => {
                 setLiveJson(null);
                 setLiveBundleMeta({});
@@ -379,16 +385,16 @@ export default function AdminDashboard() {
             return;
         }
 
-        const hasSocketJson = active.json != null;
-        const hasSocketMeta = active.bundleMeta != null;
+        const hasSocketJson = liveSocketJson != null;
+        const hasSocketMeta = liveSocketMeta != null;
 
         if (hasSocketJson || hasSocketMeta) {
             defer(() => {
                 if (hasSocketMeta) {
-                    setLiveBundleMeta(active.bundleMeta as BundleMeta);
+                    setLiveBundleMeta(liveSocketMeta as BundleMeta);
                 }
                 if (hasSocketJson) {
-                    setLiveJson(active.json as object | null);
+                    setLiveJson(liveSocketJson as object | null);
                 }
             });
             if (hasSocketJson && hasSocketMeta) {
@@ -398,8 +404,8 @@ export default function AdminDashboard() {
 
         const seq = ++liveLoadSeqRef.current;
         const metaPromise = hasSocketMeta
-            ? Promise.resolve(active.bundleMeta as BundleMeta)
-            : fetch(`/api/bundles/${encodeURIComponent(active.bundle)}`)
+            ? Promise.resolve(liveSocketMeta as BundleMeta)
+            : fetch(`/api/bundles/${encodeURIComponent(liveBundle)}`)
                 .then((r) => r.json()).catch(() => ({}));
 
         metaPromise.then((meta) => {
@@ -408,23 +414,23 @@ export default function AdminDashboard() {
             setLiveBundleMeta(resolvedMeta);
 
             if (hasSocketJson) {
-                setLiveJson(active.json as object | null);
+                setLiveJson(liveSocketJson as object | null);
                 return;
             }
             // Website/video slides have no fabric JSON on disk — fetching it always 400s.
-            const entryType = resolvedMeta.slides?.find((s) => s.id === active.slide)?.type;
+            const entryType = resolvedMeta.slides?.find((s) => s.id === liveSlide)?.type;
             if (entryType && entryType !== "fabric") {
                 setLiveJson(null);
                 return;
             }
-            fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
+            fetch(`/api/bundles/${encodeURIComponent(liveBundle)}/slides/${encodeURIComponent(liveSlide)}`)
                 .then((r) => r.json()).catch(() => null)
                 .then((json) => {
                     if (liveLoadSeqRef.current !== seq) return;
                     setLiveJson(json);
                 });
         });
-    }, [selectedDisplayState]);
+    }, [liveBundle, liveSlide, liveSocketJson, liveSocketMeta]);
 
     // Apply live meta updates only to the current live bundle view
     useEffect(() => {
