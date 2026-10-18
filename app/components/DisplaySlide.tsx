@@ -225,18 +225,19 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                             left: pos.includes("left") ? "min(30px, 3%)" : "auto",
                             right: pos.includes("right") ? "min(30px, 3%)" : "auto",
                             zIndex: 10,
-                            padding: "4px 12px",
+                            padding: "0.08em 0.25em",
                             backgroundColor: "rgba(0,0,0,0.5)",
                             backdropFilter: "blur(4px)",
                             color: "white",
                             fontFamily: "Inter",
-                            fontSize: "min(3vw, 48px)",
+                            // cqw = the slide container, so the clock keeps its proportion in small admin previews.
+                            fontSize: "min(3cqw, 48px)",
                             fontWeight: 900,
-                            letterSpacing: "1px",
-                            borderRadius: "8px",
+                            letterSpacing: "0.02em",
+                            borderRadius: "0.17em",
                             pointerEvents: "none",
-                            textShadow: "2px 2px 2px black",
-                            boxShadow: "0 4px 6px rgba(0,0,0,0.9)",
+                            textShadow: "0.04em 0.04em 0.04em black",
+                            boxShadow: "0 0.08em 0.12em rgba(0,0,0,0.9)",
                         }}
                     >
                         {localTime}

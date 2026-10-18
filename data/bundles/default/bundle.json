@@ -59,7 +59,7 @@
       "videoDuration": 10.033333
     }
   ],
-  "showLocalTime": false,
+  "showLocalTime": true,
   "backgroundFile": "waves_bottom.mp4",
   "localTimePosition": "bottom-right",
   "defaultDuration": 20,

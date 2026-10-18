@@ -1926,6 +1926,8 @@ canvas {
     justify-content: center;
     position: relative;
     overflow: hidden;
+    /* Overlays (e.g. the local-time clock) size in cqw against the slide, not the window. */
+    container-type: inline-size;
 }
 
 /* ── Slide transitions ─────────────────────────── */
