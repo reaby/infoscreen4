@@ -12,7 +12,7 @@ nav_order: 4
 
 ## Display IDs
 
-Displays are listed in `data/display.json`. Add, rename or remove them in the admin's **Displays** tab, then click **Save**.
+Displays are listed in `data/display.json`. Add, rename or remove them in the admin under **Settings → Displays**, then click **Save**.
 
 ![Display configuration]({{ '/assets/images/screenshots/display-settings.png' | relative_url }})
 

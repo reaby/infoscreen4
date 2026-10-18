@@ -14,19 +14,16 @@ Open `/admin` and sign in. Everything you need while the event runs is on this p
 
 ## Layout
 
-![The admin interface with a slide selected for preview]({{ '/assets/images/screenshots/admin-overview.png' | relative_url }})
+![The admin interface: preview with the live view in the top-right corner]({{ '/assets/images/screenshots/admin-overview.png' | relative_url }})
 
-- **Header**: connection status, number of connected displays, the selected display, and the bundle and slide it is showing now. On the right are the **display selector**, **Refresh**, the **announcement** button and the **user menu**.
+- **Header**: connection status, number of connected clients, and the display you control with the bundle and slide it is showing now. On the right are the **Controlling** display selector, the **Live** toggle, **Reload bundles**, the **announcement** button, **Settings** and the **user menu**.
 - **Bundles**: list of bundles. The badge shows the number of slides. The ⚡ button makes the bundle active on the selected display. Right-click a bundle to **rename**, **duplicate** or **delete** it.
-- **Slides**: the slides of the selected bundle, in playback order. Drag to reorder. The ▷ icon marks the slide on screen now.
-- **Main area** with tabs:
-  - **Preview**: the selected slide.
-  - **Settings**: [bundle settings](#bundle-settings).
-  - **Displays**: [display configuration](displays#display-ids).
-  - **Streams**: [live streams](streaming).
-  - **Live**: what the selected display is showing right now.
-- **Slide options** under the preview: **Edit slide**, plus [per-slide overrides](#per-slide-overrides).
-- **Footer**: [playback controls](#playback-control).
+- **Slides**: the slides of the selected bundle, in playback order. Drag to reorder. The slide on screen now has a red edge and a **LIVE** tag.
+- **Preview**: the selected slide, filling the main area. Under it are the preview navigation, **Edit slide** and the **Take ⇨ Live** button.
+- **Live view**: a small window in the top-right corner showing what the selected display shows right now, with its [playback controls](#playback-control).
+- **Slide properties**: a collapsible bar at the bottom with the [per-slide overrides](#per-slide-overrides).
+
+Bundle settings, display configuration, live streams and users are in the **Settings** panel, which slides in from the right. Close it with ✕ or Esc.
 
 Changes made by one admin appear immediately for all other admins who have `/admin` open.
 
@@ -38,11 +35,13 @@ Click the **New bundle** button at the top of the bundle list and enter a name.
 
 ### Make a bundle live
 
-Choose the display in the display selector, then click the ⚡ button on the bundle. The display starts playing the bundle from its first slide.
+Choose the display in the **Controlling** selector, then click the ⚡ button on the bundle. The display starts playing the bundle from its first slide.
+
+You can also start a bundle at a specific slide with [Take ⇨ Live](#take-a-slide-live).
 
 ### Bundle settings
 
-Open the **Settings** tab to configure the selected bundle.
+Click **Settings** in the header and open the **Bundle settings** tab to configure the selected bundle.
 
 ![Bundle settings]({{ '/assets/images/screenshots/bundle-settings.png' | relative_url }})
 
@@ -70,7 +69,7 @@ The buttons at the top of the slide list add:
 - **Add video slide**: a full-screen video from the video library.
 
 {: .warning }
-Many websites block embedding with `X-Frame-Options` or `Content-Security-Policy` headers. In that case the display shows a load-failure indicator instead of the page.
+Many websites block embedding with `X-Frame-Options` or `Content-Security-Policy` headers. Such a site stays blank on the display. The admin preview warns you only when nothing loads within 4 seconds, so check a new website slide in the preview before taking it live.
 
 To change an editor slide, select it and click **Edit slide** under the preview.
 
@@ -92,7 +91,9 @@ Right-click a slide for more actions:
 
 ### Per-slide overrides
 
-Under the preview you can override the bundle defaults for the selected slide. Click **Save** next to each one.
+Click **Slide properties** at the bottom of the page to override the bundle defaults for the selected slide. The panel opens on top of the preview, and the collapsed bar shows a summary of the current values. Click **Save** next to each setting.
+
+![Slide properties panel]({{ '/assets/images/screenshots/slide-properties.png' | relative_url }})
 
 - **Slide duration**: seconds for this slide. Leave it blank to use the bundle default.
 - **Slide transition**: leave it on **Use bundle default**, or pick a different transition.
@@ -117,19 +118,36 @@ A per-slide transition overrides the bundle default, which overrides the built-i
 
 ## Playback control
 
-Selecting a slide in the list only previews it. The footer controls change what the selected display shows:
+The admin separates what you are looking at from what is on screen:
+
+- **Preview** (grey frame) is only for you. Selecting a slide in the list, or stepping with the ◀ ▶ buttons under the preview, never changes the display.
+- **Live** (red frame) is what the display in the **Controlling** selector shows right now.
+
+### Take a slide live
+
+Select a slide, then click **Take ⇨ Live**. The display shows the slide and keeps cycling the bundle from there. The button is greyed out when the previewed slide is already live.
+
+If the slide belongs to a different bundle than the one the display is cycling, the admin asks you to confirm the switch first. The new bundle then becomes the display's active bundle.
+
+{: .note }
+Take ⇨ Live works only with a mouse click. It has no keyboard shortcut, and pressing Enter or Space on the button does nothing, so a stray key press can't change what is on screen.
+
+### Live view
+
+The live view in the top-right corner shows the slide on air, a countdown to the next slide, and these controls:
 
 | Button | Action |
 |:--|:--|
-| **Previous slide** / **Next slide** | Step through the bundle. |
-| **Show selected slide** (play) | Show the selected slide on the display and start cycling from it. |
-| **Pause cycling** | Stay on the current slide. |
-| **Blackout** | Clear the display until you show a slide again. |
-| **Reload bundles** | Reload the bundle and slide lists. |
+| **Previous slide** / **Next slide** | Step the display through the bundle. |
+| **Pause cycle** / **Resume cycle** | Stay on the current slide, or continue cycling from it. After a blackout, **Resume cycle** brings back the last slide. |
+| **Blackout** | Clear the display until you show a slide again. Asks for confirmation. |
 
-Use the **Live** tab to see exactly what the display shows:
+The countdown appears from the first slide change after you open the page.
 
-![Live tab]({{ '/assets/images/screenshots/live.png' | relative_url }})
+- Click **Live** in the header, or press `L`, to hide or show the live view. Your choice is remembered in the browser.
+- Click the live view to swap it with the preview, so the live picture fills the main area. Click the small window again to swap back.
+
+![Live view swapped into the main area]({{ '/assets/images/screenshots/live.png' | relative_url }})
 
 Playback runs on the server, so displays keep cycling when no admin is connected, and a display that reconnects resumes the current slide.
 
@@ -149,4 +167,4 @@ The announcement stays on top of the slides until you clear it. While an announc
 
 ## Live streams
 
-The **Streams** tab lists everyone currently broadcasting from [`/send`](streaming). Click **Show on display** to show a stream full-screen on the selected display, and **Clear** to return to the slides.
+The **Streams** tab in the **Settings** panel lists everyone currently broadcasting from [`/send`](streaming). Click **Show on display** to show a stream full-screen on the selected display, and **Clear** to return to the slides.
