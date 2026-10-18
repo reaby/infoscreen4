@@ -6,6 +6,7 @@ import * as fabric from "fabric";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import "./FabricVideo"; // side-effect: registers FabricVideo in classRegistry
 import { loadFabricJsonSafely } from "./fabricLoadHelpers";
+import { preloadFabricFonts, refreshTextMetrics } from "./fabricFonts";
 import { useFontRegistry } from "../hooks/useFontRegistry";
 import { loadFontsIntoDocument } from "../lib/loadCustomFonts";
 
@@ -40,10 +41,14 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
     const designHeight = bundleMeta?.height;
     const autoScale = autoScaleOverride ?? bundleMeta?.autoScale;
 
-    const fontRegistry = useFontRegistry();
+    const { uploaded: uploadedFonts, google: googleFonts } = useFontRegistry();
+    const [fontsVersion, setFontsVersion] = useState(0);
     useEffect(() => {
-        loadFontsIntoDocument(fontRegistry);
-    }, [fontRegistry]);
+        let cancelled = false;
+        loadFontsIntoDocument({ uploaded: uploadedFonts, google: googleFonts })
+            .then(() => { if (!cancelled) setFontsVersion((v) => v + 1); });
+        return () => { cancelled = true; };
+    }, [uploadedFonts, googleFonts]);
 
     // Init canvas once
     useEffect(() => {
@@ -176,6 +181,19 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                 }
             });
     }, [json]);
+
+    // Uploaded and Google fonts can finish loading after the slide was drawn;
+    // load the slide's variants of them and re-measure the text.
+    const jsonRef = useRef(json);
+    useEffect(() => { jsonRef.current = json; }, [json]);
+    useEffect(() => {
+        const c = fabricRef.current;
+        if (!c || fontsVersion === 0 || !jsonRef.current) return;
+        preloadFabricFonts(jsonRef.current).then(() => {
+            if (fabricRef.current === c) refreshTextMetrics(c);
+        });
+    }, [fontsVersion]);
+
     const fileUrl = backgroundFile
         ? `/api/files/backgrounds/${encodeURIComponent(backgroundFile)}`
         : null;

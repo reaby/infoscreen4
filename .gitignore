@@ -43,3 +43,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# github pages docs
+docs/_site
+docs/.jekyll-cache
+docs/Gemfile.lock
+
+# user accounts and login sessions (runtime data)
+data/sessions.json
+data/users.json

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { bundleManager } from "@/app/lib/BundleManager";
 import type { BundleMeta } from "@/app/interfaces/BundleMeta";
 import { notifyContentChanged } from "@/app/lib/contentEvents";
@@ -20,6 +21,8 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ bundle: string }> }
 ) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { bundle } = await params;
     if (!NAME_RE.test(bundle)) {
         return NextResponse.json({ error: "Invalid bundle name" }, { status: 400 });
@@ -38,6 +41,8 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ bundle: string }> }
 ) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { bundle } = await params;
     if (!NAME_RE.test(bundle)) {
         return NextResponse.json({ error: "Invalid bundle name" }, { status: 400 });
@@ -64,9 +69,11 @@ export async function POST(
 }
 
 export async function DELETE(
-    _req: Request,
+    req: Request,
     { params }: { params: Promise<{ bundle: string }> }
 ) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { bundle } = await params;
     if (!NAME_RE.test(bundle)) {
         return NextResponse.json({ error: "Invalid bundle name" }, { status: 400 });

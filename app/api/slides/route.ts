@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { readdir, mkdir } from "fs/promises";
 import path from "path";
 import { getSlidesDir } from "@/app/lib/paths";
 
-export async function GET() {
+export async function GET(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const slidesDir = getSlidesDir();
     try {
         const entries = await readdir(slidesDir, { withFileTypes: true });

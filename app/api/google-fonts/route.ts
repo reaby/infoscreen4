@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { listGoogleFonts, addGoogleFont } from "@/app/lib/googleFonts";
 
-export async function GET() {
+export async function GET(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     return NextResponse.json(listGoogleFonts());
 }
 
 export async function POST(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const body = await req.json().catch(() => null);
     const family: unknown = body?.family;
     if (typeof family !== "string" || !family.trim()) {

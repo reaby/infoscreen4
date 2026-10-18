@@ -1,16 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createUser, deleteUser, getAllUsers, UserRole } from "../../lib/auth";
+import { authorize } from "../../lib/authorization";
+import { destroyUserSessions } from "../../lib/session";
+import { clearSetupCode, isValidSetupCode } from "../../lib/setupCode";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+    const denied = await authorize(req);
+    if (denied) return denied;
+
     const users = await getAllUsers();
     return NextResponse.json(users.map(({ username, role }) => ({ username, role })));
 }
 
 export async function POST(req: NextRequest) {
-    const body = await req.json();
+    // The very first account may be created without signing in, using the
+    // one-time setup code printed in the server console.
+    const isInitialSetup = (await getAllUsers()).length === 0;
+    const body = await req.json().catch(() => null);
+
+    if (isInitialSetup) {
+        if (!isValidSetupCode(body?.setupCode)) {
+            return NextResponse.json(
+                { message: "Invalid setup code. The code is printed in the server console." },
+                { status: 403 }
+            );
+        }
+    } else {
+        const denied = await authorize(req);
+        if (denied) return denied;
+    }
+
     const username = String(body?.username ?? "").trim();
     const password = String(body?.password ?? "");
-    const role: UserRole = body?.role === "streamer" ? "streamer" : "admin";
+    const role: UserRole = !isInitialSetup && body?.role === "streamer" ? "streamer" : "admin";
 
     if (!username || !password) {
         return NextResponse.json({ message: "Username and password are required." }, { status: 400 });
@@ -18,6 +40,7 @@ export async function POST(req: NextRequest) {
 
     try {
         await createUser(username, password, role);
+        if (isInitialSetup) clearSetupCode();
         return NextResponse.json({ created: true });
     } catch (error) {
         return NextResponse.json(
@@ -28,7 +51,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-    const body = await req.json();
+    const denied = await authorize(req);
+    if (denied) return denied;
+
+    const body = await req.json().catch(() => null);
     const username = String(body?.username ?? "").trim();
 
     if (!username) {
@@ -37,6 +63,7 @@ export async function DELETE(req: NextRequest) {
 
     try {
         await deleteUser(username);
+        destroyUserSessions(username);
         return NextResponse.json({ deleted: true });
     } catch (error) {
         return NextResponse.json(

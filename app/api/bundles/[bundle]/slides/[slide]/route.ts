@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
@@ -30,6 +31,8 @@ export async function GET(_req: Request, { params }: Ctx) {
 }
 
 export async function POST(req: Request, { params }: Ctx) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { bundle, slide: id } = await params;
     const body = await req.text();
     // Validate it's JSON
@@ -55,7 +58,9 @@ export async function POST(req: Request, { params }: Ctx) {
     return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: Request, { params }: Ctx) {
+export async function DELETE(req: Request, { params }: Ctx) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { bundle, slide: id } = await params;
 
     bundleManager.removeSlideEntry(bundle, id);

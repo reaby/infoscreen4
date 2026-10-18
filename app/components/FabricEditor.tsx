@@ -8,6 +8,7 @@ import Toolbar from "./Toolbar";
 import ContextMenu from "./ContextMenu";
 import ShortcutHelpPopup from "./ShortcutHelpPopup";
 import { loadFabricJsonSafely, sanitizeCanvasJson } from "./fabricLoadHelpers";
+import { refreshTextMetrics } from "./fabricFonts";
 import { FabricVideo } from "./FabricVideo";
 
 const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
@@ -268,19 +269,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             selection: true,
         });
 
-        document.fonts.ready.then(() => {
-            if (fabric.cache && fabric.cache.charWidthsCache) {
-                fabric.cache.charWidthsCache.clear();
-            }
-            canvas.getObjects().forEach((obj) => {
-                if (obj instanceof fabric.IText || obj instanceof fabric.Textbox || obj instanceof fabric.Text) {
-                    (obj as any)._clearCache?.();
-                    obj.initDimensions?.();
-                    obj.setCoords();
-                }
-            });
-            canvas.requestRenderAll();
-        });
+        document.fonts.ready.then(() => refreshTextMetrics(canvas));
 
         fabric.InteractiveFabricObject.ownDefaults = {
             ...fabric.InteractiveFabricObject.ownDefaults,

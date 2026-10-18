@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { safeEqual } from "./safeEqual";
 
 export type UserRole = "admin" | "streamer";
 
@@ -54,7 +55,9 @@ export async function getUserByUsername(username: string) {
 
 export async function validateUser(username: string, password: string) {
     const user = await getUserByUsername(username);
-    return user?.password === password;
+    // Compare even when the user doesn't exist, so timing doesn't reveal valid usernames.
+    const passwordMatches = safeEqual(password, user?.password ?? "");
+    return user !== null && passwordMatches;
 }
 
 export async function createUser(username: string, password: string, role: UserRole = "admin") {

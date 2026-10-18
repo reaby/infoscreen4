@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { rename } from "fs/promises";
 import path from "path";
 import { bundleManager } from "@/app/lib/BundleManager";
@@ -8,6 +9,8 @@ import { notifyContentChanged } from "@/app/lib/contentEvents";
 type Ctx = { params: Promise<{ bundle: string; slide: string }> };
 
 export async function POST(req: Request, { params }: Ctx) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const { bundle, slide: id } = await params;
     const body = await req.json().catch(() => ({}));
     const newName = body.newName as string;

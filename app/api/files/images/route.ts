@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
+import { authorize } from "@/app/lib/authorization";
 import { readdir, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { getImagesDir } from "@/app/lib/paths";
 
 const MAX_SIZE = 200 * 1024 * 1024; // 200 MB
 
-export async function GET() {
+export async function GET(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const imagesDir = getImagesDir();
     try {
         await mkdir(imagesDir, { recursive: true });
@@ -17,6 +20,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    const denied = await authorize(req);
+    if (denied) return denied;
     const imagesDir = getImagesDir();
     const ct = req.headers.get("content-type") ?? "";
     if (!ct.includes("multipart/form-data")) {
