@@ -95,6 +95,9 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
             if (autoScale) {
                 const cw = container.clientWidth;
                 const ch = container.clientHeight;
+                // A collapsed container would give zoom 0; fabric then caches objects as
+                // off-screen and stops drawing them even after the container grows back.
+                if (cw === 0 || ch === 0) return;
                 const scale = Math.min(cw / dw, ch / dh);
                 canvasW = dw * scale;
                 canvasH = dh * scale;
@@ -139,10 +142,14 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
             setIframeFailed(false);
             setIframeLoaded(false);
         });
-        if (!websiteUrl) return;
+    }, [websiteUrl]);
+
+    // Re-runs once the iframe reports a load, which cancels the pending timeout.
+    useEffect(() => {
+        if (!websiteUrl || iframeLoaded) return;
         const timer = setTimeout(() => setIframeFailed(true), 4000);
         return () => clearTimeout(timer);
-    }, [websiteUrl]);
+    }, [websiteUrl, iframeLoaded]);
 
     useEffect(() => {
         if (!bundleMeta?.showLocalTime) return;

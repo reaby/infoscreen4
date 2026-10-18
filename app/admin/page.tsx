@@ -2,15 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-import { useSocket, DisplayConfig } from "../hooks/useSocket";
+import { useSocket } from "../hooks/useSocket";
 import {
-    Monitor, MonitorOff, Pencil, StepBack, StepForward,
-    Play, Pause, RotateCcw, FolderPlus, RefreshCw, Settings, CircleOff, Zap, FilePlus, FolderOpen, User, ChevronDown, Globe, Radio, Clock, Video, SkipForward, Megaphone
+    Monitor, MonitorOff, Pencil, StepBack, StepForward, Cast,
+    Play, FolderPlus, RefreshCw, Settings, Zap, FilePlus, FolderOpen, User, ChevronDown, ChevronRight, Globe, Radio, Clock, Video, SkipForward, Megaphone
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
-import { TRANSITION_TYPES, TransitionConfig } from "../lib/transitions";
+import { TransitionConfig } from "../lib/transitions";
 import { isSlideScheduledNow } from "../lib/schedule";
 import BundleSettingsPanel from "../components/BundleSettingsPanel";
 import GlobalSlidePickerModal from "../components/GlobalSlidePickerModal";
@@ -19,14 +18,46 @@ import AdminContextMenu from "../components/AdminContextMenu";
 import StreamsPanel from "../components/StreamsPanel";
 import FileManagerDialog from "../components/FileManagerDialog";
 import AnnouncementDialog from "../components/AnnouncementDialog";
-const DisplaySlide = dynamic(() => import("../components/DisplaySlide"), { ssr: false });
+import StudioMonitor from "../components/StudioMonitor";
+import LivePanel from "../components/LivePanel";
+import SlideInspector, { SlideScheduleDraft } from "../components/SlideInspector";
+import SettingsDrawer, { DrawerTab } from "../components/SettingsDrawer";
+import DisplayConfigPanel from "../components/DisplayConfigPanel";
 
 interface BundleInfo {
     name: string;
     slides: string[];
 }
 
-interface SlideScheduleDraft { mode: "range" | "daily"; start: string; end: string; dailyStart: string; dailyEnd: string }
+type SettingsTab = "bundle" | "displays" | "streams" | "users";
+
+interface PendingTake {
+    bundle: string;
+    slide: string;
+}
+
+const LIVE_VIEW_STORAGE_KEY = "admin.liveViewVisible";
+
+const readLiveViewPreference = () => {
+    try {
+        return localStorage.getItem(LIVE_VIEW_STORAGE_KEY) !== "0";
+    } catch {
+        return true;
+    }
+};
+
+const writeLiveViewPreference = (visible: boolean) => {
+    try {
+        localStorage.setItem(LIVE_VIEW_STORAGE_KEY, visible ? "1" : "0");
+    } catch {
+        // Storage can be unavailable (private mode); the toggle still works for this session.
+    }
+};
+
+// Keyboard shortcuts must not fire while the user is typing or has a control focused.
+const isTypingTarget = (target: EventTarget | null) =>
+    target instanceof HTMLElement && !!target.closest("input, textarea, select, button, [contenteditable='true']");
+
 const EMPTY_SCHEDULE_DRAFT: SlideScheduleDraft = { mode: "range", start: "", end: "", dailyStart: "", dailyEnd: "" };
 
 const DEFAULT_DURATION = 10;
@@ -79,7 +110,6 @@ export default function AdminDashboard() {
     const { connected, state, showSlide, clearSlide, stopCycle, queueNextSlide, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate, showStream, clearStream, showAnnouncement, showAnnouncementAll, clearAnnouncementAll, socketRef } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState<string | null>(null);
-    const [displayDrafts, setDisplayDrafts] = useState<DisplayConfig[]>([]);
 
     const [adminContextMenu, setAdminContextMenu] = useState<{
         visible: boolean;
@@ -137,7 +167,11 @@ export default function AdminDashboard() {
     const [selectedSlide, setSelectedSlide] = useState<string | null>(null);
     const [previewJson, setPreviewJson] = useState<object | null>(null);
     const [liveJson, setLiveJson] = useState<object | null>(null);
-    const [previewTab, setPreviewTab] = useState<"preview" | "live" | "settings" | "users" | "displays" | "streams">("preview");
+    const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+    const [liveViewVisible, setLiveViewVisible] = useState(true);
+    const [liveSwapped, setLiveSwapped] = useState(false);
+    const [inspectorOpen, setInspectorOpen] = useState(false);
+    const [pendingTake, setPendingTake] = useState<PendingTake | null>(null);
     const [bundleMeta, setBundleMeta] = useState<BundleMeta>({});
     const [liveBundleMeta, setLiveBundleMeta] = useState<BundleMeta>({});
     const [metaDraft, setMetaDraft] = useState<BundleMeta>({});
@@ -167,9 +201,18 @@ export default function AdminDashboard() {
         return state.displayConfigs[0]?.id ?? null;
     }, [selectedDisplay, state.displayConfigs]);
 
+    // localStorage is only readable after mount; reading it during render would break hydration.
     useEffect(() => {
-        defer(() => setDisplayDrafts(state.displayConfigs));
-    }, [state.displayConfigs]);
+        defer(() => setLiveViewVisible(readLiveViewPreference()));
+    }, []);
+
+    const toggleLiveView = useCallback(() => {
+        setLiveViewVisible((visible) => {
+            writeLiveViewPreference(!visible);
+            return !visible;
+        });
+        setLiveSwapped(false);
+    }, []);
 
     const selectedDisplayState = useMemo(
         () => effectiveSelectedDisplay ? state.displayStates?.[effectiveSelectedDisplay] ?? null : null,
@@ -430,66 +473,68 @@ export default function AdminDashboard() {
             .finally(() => setLoadingPreview(false));
     }, [selectedBundle, selectedSlide, selectedEntry]);
 
-    // Pushes a slide to the currently selected display immediately (used by both
-    // the "show selected slide" button and the prev/next transport controls).
-    const pushSlideToDisplay = useCallback(async (slideId: string) => {
-        if (!effectiveSelectedDisplay) return;
-        const targetBundle = selectedDisplayState?.bundle ?? selectedBundle;
-        if (!targetBundle) return;
+    // The bundle's default duration is the base the server cycles with; reuse
+    // metadata already loaded for the preview or live bundle before fetching.
+    const resolveBaseDuration = useCallback(async (bundle: string) => {
+        const knownMeta = bundle === selectedBundle ? bundleMeta
+            : bundle === selectedDisplayState?.bundle ? liveBundleMeta
+                : null;
+        const meta: BundleMeta = knownMeta ?? await fetch(`/api/bundles/${encodeURIComponent(bundle)}`)
+            .then((r) => r.json())
+            .catch(() => ({}));
+        const duration = meta.defaultDuration;
+        return typeof duration === "number" && Number.isFinite(duration) ? duration : DEFAULT_DURATION;
+    }, [selectedBundle, bundleMeta, selectedDisplayState?.bundle, liveBundleMeta]);
 
-        let baseDuration = DEFAULT_DURATION;
-        if (selectedBundle === targetBundle) {
-            const fromSelected = bundleMeta.defaultDuration;
-            if (typeof fromSelected === "number" && Number.isFinite(fromSelected)) {
-                baseDuration = fromSelected;
-            }
-        } else {
-            const remoteMeta: BundleMeta = await fetch(`/api/bundles/${encodeURIComponent(targetBundle)}`)
-                .then((r) => r.json())
-                .catch(() => ({}));
-            const fromRemote = remoteMeta.defaultDuration;
-            if (typeof fromRemote === "number" && Number.isFinite(fromRemote)) {
-                baseDuration = fromRemote;
-            }
+    // Puts a slide on the selected display; the server keeps cycling its bundle from there.
+    const pushSlideToDisplay = useCallback(async (bundle: string, slideId: string) => {
+        if (!effectiveSelectedDisplay) return;
+        const duration = await resolveBaseDuration(bundle);
+        showSlide(effectiveSelectedDisplay, { bundle, slide: slideId, duration });
+    }, [effectiveSelectedDisplay, resolveBaseDuration, showSlide]);
+
+    // Remembers what was last on air so "Resume cycle" can bring it back after a blackout.
+    const [lastLive, setLastLive] = useState<(PendingTake & { display: string }) | null>(null);
+    useEffect(() => {
+        if (!selectedDisplayState || !effectiveSelectedDisplay) return;
+        const { bundle, slide } = selectedDisplayState;
+        defer(() => setLastLive({ display: effectiveSelectedDisplay, bundle, slide }));
+    }, [selectedDisplayState, effectiveSelectedDisplay]);
+    const resumeTarget: PendingTake | null = selectedDisplayState
+        ?? (lastLive?.display === effectiveSelectedDisplay ? lastLive : null);
+
+    const handleTake = useCallback(() => {
+        if (!selectedBundle || !selectedSlide || !connected) return;
+        const liveBundle = selectedDisplayState?.bundle;
+        if (liveBundle && liveBundle !== selectedBundle) {
+            setPendingTake({ bundle: selectedBundle, slide: selectedSlide });
+            return;
         }
+        void pushSlideToDisplay(selectedBundle, selectedSlide);
+    }, [connected, pushSlideToDisplay, selectedBundle, selectedDisplayState?.bundle, selectedSlide]);
 
-        showSlide(effectiveSelectedDisplay, { bundle: targetBundle, slide: slideId, duration: baseDuration });
-    }, [effectiveSelectedDisplay, selectedDisplayState, selectedBundle, bundleMeta, showSlide]);
-
-    const handleShowSlide = async () => {
-        if (!effectiveSelectedDisplay) return;
-        const targetBundle = selectedDisplayState?.bundle ?? selectedBundle;
-        if (!targetBundle || activeBundleSlides.length === 0) return;
-
-        const canUsePreviewSelection = selectedBundle === targetBundle
-            && !!selectedSlide
-            && activeBundleSlides.includes(selectedSlide);
-
-        const slideToShow = canUsePreviewSelection
-            ? selectedSlide
-            : (selectedDisplayState?.bundle === targetBundle && selectedDisplayState?.slide
-                ? selectedDisplayState.slide
-                : activeBundleSlides[0]);
-
-        if (selectedBundle === targetBundle && selectedSlide !== slideToShow) {
-            setSelectedSlide(slideToShow);
-        }
-
-        await pushSlideToDisplay(slideToShow);
-    };
-
-    const handleStopCycle = useCallback(() => {
-        if (!effectiveSelectedDisplay) return;
-        stopCycle(effectiveSelectedDisplay);
-    }, [effectiveSelectedDisplay, stopCycle]);
-
-    const handleClearSlide = async () => {
-        if (!effectiveSelectedDisplay) return;
-        if (!await askConfirm("Blackout the selected display?")) return;
-        clearSlide(effectiveSelectedDisplay);
+    const confirmPendingTake = () => {
+        if (pendingTake) void pushSlideToDisplay(pendingTake.bundle, pendingTake.slide);
+        setPendingTake(null);
     };
 
     const selectedDisplayIsCycling = effectiveSelectedDisplay ? state.displayCycling?.[effectiveSelectedDisplay] ?? false : false;
+
+    const handleToggleLiveCycle = () => {
+        if (!effectiveSelectedDisplay) return;
+        if (selectedDisplayIsCycling) {
+            stopCycle(effectiveSelectedDisplay);
+            return;
+        }
+        // Re-showing a slide restarts the server's cycle from that slide.
+        if (resumeTarget) void pushSlideToDisplay(resumeTarget.bundle, resumeTarget.slide);
+    };
+
+    const handleClearSlide = async () => {
+        if (!effectiveSelectedDisplay) return;
+        if (!await askConfirm(`Blackout ${selectedDisplayConfig?.name ?? "the selected display"}?`)) return;
+        clearSlide(effectiveSelectedDisplay);
+    };
 
     const handleNewBundle = async () => {
         const name = (await askPrompt("New bundle name:"))?.trim().replace(/[^a-zA-Z0-9_\- ]/g, "-");
@@ -701,19 +746,21 @@ export default function AdminDashboard() {
         saveMeta({ slides: nextSlides });
     };
 
-    const navigate = (dir: 1 | -1) => {
-        if (previewTab === "live") {
-            if (!effectiveSelectedDisplay || eligibleActiveBundleSlides.length === 0) return;
-            const cur = selectedDisplayState?.slide ? eligibleActiveBundleSlides.indexOf(selectedDisplayState.slide) : -1;
-            const next = (cur + dir + eligibleActiveBundleSlides.length) % eligibleActiveBundleSlides.length;
-            pushSlideToDisplay(eligibleActiveBundleSlides[next]);
-            return;
-        }
+    const stepIndex = (list: string[], current: string | null | undefined, dir: 1 | -1) => {
+        const cur = current ? list.indexOf(current) : -1;
+        return (cur + dir + list.length) % list.length;
+    };
 
+    // Browses the preview only; never touches what is on air.
+    const stepPreview = (dir: 1 | -1) => {
         if (!eligibleSlides.length) return;
-        const cur = selectedSlide ? eligibleSlides.indexOf(selectedSlide) : -1;
-        const next = (cur + dir + eligibleSlides.length) % eligibleSlides.length;
-        setSelectedSlide(eligibleSlides[next]);
+        setSelectedSlide(eligibleSlides[stepIndex(eligibleSlides, selectedSlide, dir)]);
+    };
+
+    const stepLive = (dir: 1 | -1) => {
+        if (!selectedDisplayState || !eligibleActiveBundleSlides.length) return;
+        const next = eligibleActiveBundleSlides[stepIndex(eligibleActiveBundleSlides, selectedDisplayState.slide, dir)];
+        void pushSlideToDisplay(selectedDisplayState.bundle, next);
     };
 
     const isActive = (bundle: string, slide: string) =>
@@ -818,15 +865,137 @@ export default function AdminDashboard() {
         saveMeta({ slides: nextSlides });
     }, [orderedEntries, saveMeta, selectedSlide, slideScheduleDraft, slides]);
 
+    // Shortcut: L shows or hides the live view. Taking a slide live deliberately has no
+    // keyboard shortcut, so a stray key press can't change what is on screen.
+    // Skipped while a dialog or the settings drawer is open.
+    const shortcutsBlocked = !!dialog || settingsTab !== null || announcementDialogOpen || pendingTake !== null;
+    useEffect(() => {
+        if (shortcutsBlocked) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return;
+            if (e.key === "l" || e.key === "L") toggleLiveView();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [shortcutsBlocked, toggleLiveView]);
+
+    // A focused button also fires on Enter/Space with click detail 0; only real pointer clicks may go live.
+    const onPointerClickOnly = (action: () => void) => (e: React.MouseEvent) => {
+        if (e.detail === 0) return;
+        action();
+    };
+
+    const closeSettings = useCallback(() => setSettingsTab(null), []);
+
     if (!authChecked) {
         return null;
     }
 
-    const previewHeaderTitle =
-        previewTab === "preview" ? selectedSlide :
-            previewTab === "live" ? selectedDisplayState?.slide :
-                previewTab === "users" ? "User management" :
-                    selectedBundle;
+    const titleOf = (entry: BundleSlideEntry | undefined, id: string) => entry?.title || id;
+    const previewEntry = selectedSlide ? entryBySlide.get(selectedSlide) : undefined;
+    const liveEntry = selectedDisplayState
+        ? liveBundleMeta.slides?.find((s) => s.id === selectedDisplayState.slide)
+        : undefined;
+    const liveSlideTitle = selectedDisplayState ? titleOf(liveEntry, selectedDisplayState.slide) : null;
+    const displayName = selectedDisplayConfig?.name ?? "Display";
+    const previewIsLive = !!selectedBundle && !!selectedSlide && isActive(selectedBundle, selectedSlide);
+    const previewPosition = selectedSlide ? eligibleSlides.indexOf(selectedSlide) : -1;
+    const showLiveInMain = liveViewVisible && liveSwapped;
+
+    const inspectorSummary = (() => {
+        if (!previewEntry) return selectedSlide ? "" : "Select a slide";
+        const parts = [
+            typeof previewEntry.duration === "number" ? `${previewEntry.duration} s` : "bundle duration",
+            previewEntry.transition ? previewEntry.transition.type : "bundle transition",
+        ];
+        if (previewEntry.schedule) parts.push("scheduled");
+        return parts.join(" · ");
+    })();
+
+    const previewMonitor = (
+        <StudioMonitor
+            key="preview"
+            variant="preview"
+            json={previewJson}
+            bundleMeta={bundleMeta}
+            activeEntry={previewEntry ?? null}
+            overlay={loadingPreview ? "Loading…" : !selectedSlide ? "Select a slide to preview" : null}
+        />
+    );
+
+    const liveMonitor = (
+        <StudioMonitor
+            key="live"
+            variant="live"
+            json={liveJson}
+            bundleMeta={liveBundleMeta}
+            activeEntry={liveEntry ?? null}
+            overlay={selectedDisplayState ? null : "Blackout"}
+            announcement={selectedDisplayAnnouncement}
+        />
+    );
+
+    const settingsTabs: DrawerTab<SettingsTab>[] = [
+        {
+            id: "bundle",
+            label: <><Settings size={11} /> Bundle settings</>,
+            disabled: !selectedBundle,
+            content: (
+                <BundleSettingsPanel
+                    selectedBundle={selectedBundle}
+                    bundleMeta={bundleMeta}
+                    metaDraft={metaDraft}
+                    setMetaDraft={setMetaDraft}
+                    saveMeta={saveMeta}
+                />
+            ),
+        },
+        {
+            id: "displays",
+            label: "Displays",
+            content: (
+                <DisplayConfigPanel
+                    configs={state.displayConfigs}
+                    onSave={updateDisplayConfig}
+                    onClose={closeSettings}
+                />
+            ),
+        },
+        {
+            id: "streams",
+            label: <><Radio size={11} />{state.streams?.length > 0 && <span className="admin-live-dot" />} Streams</>,
+            content: (
+                <div className="admin-display-config-panel">
+                    <div className="admin-display-config-header">
+                        <strong>Live Streams</strong>
+                        <a href="/send" target="_blank" className="admin-nav-btn" style={{ textDecoration: "none" }}>
+                            <Radio size={12} /> Open /send
+                        </a>
+                    </div>
+                    <StreamsPanel
+                        streams={state.streams ?? []}
+                        socketRef={socketRef}
+                        displayConfigs={state.displayConfigs}
+                        selectedDisplay={effectiveSelectedDisplay}
+                        displayActiveStreams={displayActiveStreams}
+                        onShowStream={(streamId, displayId) => {
+                            showStream(streamId, displayId);
+                            setDisplayActiveStreams((prev) => ({ ...prev, [displayId]: streamId }));
+                        }}
+                        onClearStream={(displayId) => {
+                            clearStream(displayId);
+                            setDisplayActiveStreams((prev) => {
+                                const next = { ...prev };
+                                delete next[displayId];
+                                return next;
+                            });
+                        }}
+                    />
+                </div>
+            ),
+        },
+        { id: "users", label: "Users", content: <UserManager /> },
+    ];
 
     return (
         <>
@@ -846,38 +1015,51 @@ export default function AdminDashboard() {
                         </span>
                         <span className="admin-display-pill">
                             {state.connectedDisplays > 0
-                                ? <><Monitor size={13} />&nbsp;{state.connectedDisplays} display{state.connectedDisplays !== 1 ? "s" : ""}</>
-                                : <><MonitorOff size={13} />&nbsp;No displays</>}
+                                ? <><Monitor size={13} />&nbsp;{state.connectedDisplays} client{state.connectedDisplays !== 1 ? "s" : ""}</>
+                                : <><MonitorOff size={13} />&nbsp;No clients</>}
                         </span>
                         {selectedDisplayConfig && (
                             <span className="admin-now-pill">
-                                {selectedDisplayConfig.name}
-                            </span>
-                        )}
-                        {selectedDisplayState && (
-                            <span className="admin-now-pill">
-                                <Play size={11} />
-                                &nbsp;{selectedDisplayState.bundle}&nbsp;/&nbsp;<strong>{selectedDisplayState.slide}</strong>
+                                {selectedDisplayState && <Play size={11} />}
+                                <span>{selectedDisplayConfig.name}</span>
+                                {selectedDisplayState && (
+                                    <>
+                                        <ChevronRight size={11} className="admin-now-sep" />
+                                        <span>{selectedDisplayState.bundle}</span>
+                                        <ChevronRight size={11} className="admin-now-sep" />
+                                        <strong>{liveSlideTitle}</strong>
+                                    </>
+                                )}
                             </span>
                         )}
                     </div>
 
                     <nav className="admin-header-nav">
                         {state.displayConfigs.length > 0 && (
-                            <>
+                            <div className="admin-display-picker">
+                                <label htmlFor="admin-display-select">Controlling</label>
                                 <select
+                                    id="admin-display-select"
                                     className="admin-display-select"
                                     value={effectiveSelectedDisplay ?? ""}
                                     onChange={(e) => setSelectedDisplay(e.target.value)}
-                                    title="Select display"
+                                    title="The display that TAKE and the live controls act on"
                                 >
                                     {state.displayConfigs.map((conf) => (
                                         <option key={conf.id} value={conf.id}>{conf.name}</option>
                                     ))}
                                 </select>
-                            </>
+                            </div>
                         )}
-                        <button className="admin-nav-btn" onClick={loadBundles} title="Refresh">
+                        <button
+                            className={`admin-nav-btn${liveViewVisible ? " active" : ""}`}
+                            onClick={toggleLiveView}
+                            title={liveViewVisible ? "Hide the live view (L)" : "Show the live view (L)"}
+                            aria-pressed={liveViewVisible}
+                        >
+                            <Cast size={13} /> Live
+                        </button>
+                        <button className="admin-nav-btn" onClick={loadBundles} title="Reload bundles">
                             <RefreshCw size={13} />
                         </button>
                         <button
@@ -886,6 +1068,13 @@ export default function AdminDashboard() {
                             title={hasActiveAnnouncement ? "Lower-third announcement (active)" : "Lower-third announcement"}
                         >
                             <Megaphone size={13} />
+                        </button>
+                        <button
+                            className={`admin-nav-btn${settingsTab ? " active" : ""}`}
+                            onClick={() => setSettingsTab(selectedBundle ? "bundle" : "displays")}
+                            title="Bundle, display, stream and user settings"
+                        >
+                            <Settings size={13} /> Settings
                         </button>
 
                         <div className="admin-user-menu" ref={userMenuRef}>
@@ -907,7 +1096,7 @@ export default function AdminDashboard() {
                                         className="admin-user-menu-item"
                                         type="button"
                                         onClick={() => {
-                                            setPreviewTab("users");
+                                            setSettingsTab("users");
                                             setUserMenuOpen(false);
                                         }}
                                     >
@@ -1182,10 +1371,10 @@ export default function AdminDashboard() {
                                         }}
                                     >
                                         <div className={`admin-list-item admin-list-item-draggable ${selectedSlide === slide ? "selected" : ""} ${isActive(selectedBundle!, slide) ? "playing" : ""} ${isDragging ? "dragging" : ""} ${isDragOver ? "drag-over" : ""}`} title="Drag to reorder">
-                                            <span className="admin-playing-icon-placeholder">
-                                                {isActive(selectedBundle!, slide) ? <Play size={14} className="admin-playing-icon" /> : null}
-                                            </span>
                                             <span className="admin-list-item-name" onClick={() => setSelectedSlide(slide)} style={{ cursor: "pointer" }}>{existingEntry?.title || slide}</span>
+                                            {isActive(selectedBundle!, slide) && (
+                                                <span className="admin-live-tag" title={`On air on ${displayName}`}>Live</span>
+                                            )}
                                             {existingEntry?.schedule && (
                                                 <span className="admin-label" title="This slide has a scheduled cycling window">
                                                     <Clock size={12} />
@@ -1217,401 +1406,129 @@ export default function AdminDashboard() {
                         </ul>
                     </aside>
 
-                    {/* Column 3 – Preview + details */}
-                    <section className="admin-col admin-col-preview">
+                    {/* Column 3 – Studio: preview with a live picture-in-picture */}
+                    <section className="admin-col admin-col-studio">
                         <div className="admin-col-header">
-                            <div className="admin-preview-header-row">
-                                <div className="admin-preview-tabs-left">
-                                    <button
-                                        className={`admin-preview-tab ${previewTab === "preview" ? "active" : ""}`}
-                                        onClick={() => setPreviewTab("preview")}
-                                    >Preview</button>
-                                    <button
-                                        className={`admin-preview-tab ${previewTab === "settings" ? "active" : ""}`}
-                                        onClick={() => setPreviewTab("settings")}
-                                        disabled={!selectedBundle}
-                                        title="Bundle settings"
-                                    >
-                                        <Settings size={11} /> Settings
-                                    </button>
-                                    {state.displayConfigs.length > 0 && (
-                                        <button
-                                            className={`admin-preview-tab ${previewTab === "displays" ? "active" : ""}`}
-                                            type="button"
-                                            onClick={() => setPreviewTab("displays")}
-                                            title="Display settings"
-                                        >
-                                            Displays
-                                        </button>
-                                    )}
-                                    <button
-                                        className={`admin-preview-tab ${previewTab === "streams" ? "active" : ""}`}
-                                        type="button"
-                                        onClick={() => setPreviewTab("streams")}
-                                        title="Live streams"
-                                    >
-                                        <Radio size={11} />
-                                        {state.streams?.length > 0 && (
-                                            <span className="admin-live-dot" />
-                                        )}
-                                        Streams
-                                    </button>
-                                </div>
-
-                                <button
-                                    className={`admin-preview-tab admin-preview-tab-live-edge ${previewTab === "live" ? "active" : ""} ${selectedDisplayState ? "live" : ""}`}
-                                    onClick={() => setPreviewTab("live")}
-                                >
-                                    {selectedDisplayState && <span className="admin-live-dot" />}Live
-                                </button>
-                            </div>
+                            <span className="admin-studio-title">
+                                {showLiveInMain ? "Live" : "Preview"}
+                                <span className="admin-studio-crumb">
+                                    {showLiveInMain
+                                        ? `— ${displayName}`
+                                        : selectedBundle ? `— ${selectedBundle}${selectedSlide ? ` › ${titleOf(previewEntry, selectedSlide)}` : ""}` : ""}
+                                </span>
+                            </span>
                         </div>
 
-                        {previewTab === "settings" ? (
-                            <BundleSettingsPanel
-                                selectedBundle={selectedBundle}
-                                bundleMeta={bundleMeta}
-                                metaDraft={metaDraft}
-                                setMetaDraft={setMetaDraft}
-                                saveMeta={saveMeta}
-                            />
-                        ) : previewTab === "users" ? (
-                            <UserManager />
-                        ) : previewTab === "displays" ? (
-                            <div className="admin-display-config-panel">
-                                <div className="admin-display-config-header">
-                                    <strong>Display configuration</strong>
+                        <div className="admin-studio-body">
+                            <div className="admin-monitors">
+                                <div className="admin-monitor-main">
+                                    {showLiveInMain ? liveMonitor : previewMonitor}
                                 </div>
-                                {displayDrafts.map((config, index) => (
-                                    <div className="admin-display-config-row" key={config.id}>
-                                        <div className="admin-display-config-field">
-                                            <label className="admin-label">ID</label>
-                                            <input
-                                                value={config.id}
-                                                onChange={(e) => {
-                                                    const nextId = e.target.value.trim();
-                                                    setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, id: nextId || item.id } : item));
-                                                }}
-                                                className="admin-settings-input"
-                                                style={{ width: 100 }}
-                                            />
-                                        </div>
-                                        <div className="admin-display-config-field">
-                                            <label className="admin-label">Name</label>
-                                            <input
-                                                value={config.name}
-                                                onChange={(e) => setDisplayDrafts((current) => current.map((item, idx) => idx === index ? { ...item, name: e.target.value } : item))}
-                                                className="admin-settings-input"
-                                                style={{ width: 180 }}
-                                            />
-                                        </div>
-                                        <button
-                                            className="admin-nav-btn"
-                                            type="button"
-                                            onClick={() => setDisplayDrafts((current) => current.filter((_, idx) => idx !== index))}
-                                            disabled={displayDrafts.length <= 1}
-                                            title="Remove display"
-                                        >
-                                            ✕
+                                {liveViewVisible && (
+                                    <LivePanel
+                                        displayName={displayName}
+                                        liveBundle={selectedDisplayState?.bundle ?? null}
+                                        liveSlideTitle={liveSlideTitle}
+                                        slideDuration={selectedDisplayState?.duration ?? null}
+                                        cycling={selectedDisplayIsCycling}
+                                        connected={connected}
+                                        canStep={!!selectedDisplayState && eligibleActiveBundleSlides.length > 1}
+                                        canResume={resumeTarget !== null}
+                                        onSwap={() => setLiveSwapped((swapped) => !swapped)}
+                                        onPrev={() => stepLive(-1)}
+                                        onNext={() => stepLive(1)}
+                                        onTogglePause={handleToggleLiveCycle}
+                                        onBlackout={handleClearSlide}
+                                    >
+                                        {showLiveInMain ? previewMonitor : liveMonitor}
+                                    </LivePanel>
+                                )}
+                            </div>
+
+                            <div className="admin-preview-bar">
+                                <button className="admin-nav-btn" onClick={() => stepPreview(-1)} disabled={eligibleSlides.length < 2} title="Previous slide in preview">
+                                    <StepBack size={13} />
+                                </button>
+                                <button className="admin-nav-btn" onClick={() => stepPreview(1)} disabled={eligibleSlides.length < 2} title="Next slide in preview">
+                                    <StepForward size={13} />
+                                </button>
+                                {previewPosition >= 0 && (
+                                    <span className="admin-label">
+                                        {previewPosition + 1} / {eligibleSlides.length} in <strong>{selectedBundle}</strong>
+                                    </span>
+                                )}
+                                {selectedBundle && selectedSlide && (
+                                    previewEntry?.type === "website" ? (
+                                        <button className="admin-nav-btn" onClick={() => handleRenameSlide(selectedBundle, selectedSlide)}>
+                                            <Pencil size={13} /> Edit URL
                                         </button>
-                                    </div>
-                                ))}
-                                <div className="admin-display-config-actions">
-                                    <button
-                                        className="admin-nav-btn"
-                                        type="button"
-                                        onClick={() => setDisplayDrafts((current) => [
-                                            ...current,
-                                            { id: `display-${current.length + 1}`, name: `Display ${current.length + 1}` },
-                                        ])}
-                                    >
-                                        Add display
-                                    </button>
-                                    <button
-                                        className="admin-nav-btn"
-                                        type="button"
-                                        onClick={() => {
-                                            updateDisplayConfig(displayDrafts);
-                                            setPreviewTab("preview");
-                                        }}
-                                    >
-                                        Save
-                                    </button>
-                                    <button
-                                        className="admin-nav-btn"
-                                        type="button"
-                                        onClick={() => {
-                                            setDisplayDrafts(state.displayConfigs);
-                                            setPreviewTab("preview");
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        ) : previewTab === "streams" ? (
-                            <div className="admin-display-config-panel">
-                                <div className="admin-display-config-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <strong>Live Streams</strong>
-                                    <a href="/send" target="_blank" className="admin-nav-btn" style={{ textDecoration: "none" }}>
-                                        <Radio size={12} /> Open /send
-                                    </a>
-                                </div>
-                                <StreamsPanel
-                                    streams={state.streams ?? []}
-                                    socketRef={socketRef}
-                                    displayConfigs={state.displayConfigs}
-                                    selectedDisplay={effectiveSelectedDisplay}
-                                    displayActiveStreams={displayActiveStreams}
-                                    onShowStream={(streamId, displayId) => {
-                                        showStream(streamId, displayId);
-                                        setDisplayActiveStreams((prev) => ({ ...prev, [displayId]: streamId }));
-                                    }}
-                                    onClearStream={(displayId) => {
-                                        clearStream(displayId);
-                                        setDisplayActiveStreams((prev) => {
-                                            const next = { ...prev };
-                                            delete next[displayId];
-                                            return next;
-                                        });
-                                    }}
-                                />
-                            </div>
-                        ) : (
-                            <>
-                                <div className="admin-preview-area">
-                                    {previewTab === "preview" && loadingPreview && <div className="admin-preview-overlay">Loading…</div>}
-                                    {previewTab === "preview" && !selectedSlide && !loadingPreview && (
-                                        <div className="admin-preview-overlay">Select a slide to preview</div>
-                                    )}
-                                    {previewTab === "live" && !selectedDisplayState && (
-                                        <div className="admin-preview-overlay">Nothing broadcasting</div>
-                                    )}
-                                    <DisplaySlide
-                                        json={previewTab === "live" ? liveJson : previewJson}
-                                        bundleMeta={previewTab === "live" ? liveBundleMeta : bundleMeta}
-                                        activeEntry={
-                                            previewTab === "live"
-                                                ? liveBundleMeta?.slides?.find(s => s.id === selectedDisplayState?.slide) ?? null
-                                                : bundleMeta?.slides?.find(s => s.id === selectedSlide) ?? null
-                                        }
-                                        autoScale={true}
-                                        showMissingAssetWarning={true}
-                                        announcementActive={!!selectedDisplayAnnouncement && (!!selectedDisplayAnnouncement.line1 || !!selectedDisplayAnnouncement.line2)}
-                                    />
-                                    {selectedDisplayAnnouncement && (selectedDisplayAnnouncement.line1 || selectedDisplayAnnouncement.line2) && (
-                                        <div className="lower-third admin-preview-lower-third" style={{ background: selectedDisplayAnnouncement.color }}>
-                                            {selectedDisplayAnnouncement.line1 && <div className="lower-third-line">{selectedDisplayAnnouncement.line1}</div>}
-                                            {selectedDisplayAnnouncement.line2 && <div className="lower-third-line">{selectedDisplayAnnouncement.line2}</div>}
-                                        </div>
-                                    )}
-                                </div>
+                                    ) : previewEntry?.type === "video" ? (
+                                        <button className="admin-nav-btn" onClick={() => setVideoSlidePicker(selectedSlide)}>
+                                            <Video size={13} /> Replace Video
+                                        </button>
+                                    ) : (
+                                        <Link
+                                            href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
+                                            className="admin-nav-btn"
+                                        >
+                                            <Pencil size={13} /> Edit slide
+                                        </Link>
+                                    )
+                                )}
 
-                                <div className="admin-preview-controls">
-                                    <div className="admin-preview-row admin-preview-row-two-col">
-                                        <div className="admin-preview-col-left">
-                                            {selectedBundle && selectedSlide && (
-                                                bundleMeta?.slides?.find((s) => s.id === selectedSlide)?.type === "website" ? (
-                                                    <button
-                                                        className="admin-nav-btn"
-                                                        onClick={() => handleRenameSlide(selectedBundle, selectedSlide)}
-                                                    >
-                                                        <Pencil size={13} /> Edit URL
-                                                    </button>
-                                                ) : bundleMeta?.slides?.find((s) => s.id === selectedSlide)?.type === "video" ? (
-                                                    <button
-                                                        className="admin-nav-btn"
-                                                        onClick={() => setVideoSlidePicker(selectedSlide)}
-                                                    >
-                                                        <Video size={13} /> Replace Video
-                                                    </button>
-                                                ) : (
-                                                    <Link
-                                                        href={`/admin/editor?bundle=${encodeURIComponent(selectedBundle)}&slide=${encodeURIComponent(selectedSlide)}`}
-                                                        className="admin-nav-btn"
-                                                    >
-                                                        <Pencil size={13} /> Edit slide
-                                                    </Link>
-                                                )
-                                            )}
-                                        </div>
-                                        <div className="admin-preview-col-right">
-                                            <label className="admin-label">Slide duration</label>
-                                            <input
-                                                type="number" min={0} max={3600}
-                                                value={slideDurationDraft}
-                                                onChange={(e) => setSlideDurationDraft(e.target.value)}
-                                                className="toolbar-number-input"
-                                                style={{ width: 64 }}
-                                                title="Selected slide duration override (blank = use global)"
-                                                disabled={!selectedSlide}
-                                            />
-                                            <span className="admin-label">s</span>
-                                            <button
-                                                className="admin-nav-btn"
-                                                onClick={handleSaveSlideDuration}
-                                                disabled={!isSlideDurationDirty}
-                                                title="Save selected slide duration"
-                                            >Save</button>
-                                            {selectedSlide && isSlideDurationDirty && (
-                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
-                                            )}
-                                        </div>
-                                        <div className="admin-preview-col-right">
-                                            <label className="admin-label">Slide transition</label>
-                                            <select
-                                                value={slideTransitionDraft?.type ?? ""}
-                                                onChange={(e) => {
-                                                    const type = e.target.value;
-                                                    if (type === "") { setSlideTransitionDraft(null); return; }
-                                                    setSlideTransitionDraft({
-                                                        type: type as TransitionConfig["type"],
-                                                        duration: slideTransitionDraft?.duration ?? 600,
-                                                    });
-                                                }}
-                                                className="toolbar-number-input"
-                                                style={{ width: 130 }}
-                                                title="Selected slide transition override (blank = use bundle default)"
-                                                disabled={!selectedSlide}
-                                            >
-                                                <option value="">Use bundle default</option>
-                                                {TRANSITION_TYPES.map((t) => (
-                                                    <option key={t.value} value={t.value}>{t.label}</option>
-                                                ))}
-                                            </select>
-                                            {slideTransitionDraft && (
-                                                <>
-                                                    <input
-                                                        type="number" min={0} max={5000}
-                                                        value={slideTransitionDraft.duration}
-                                                        onChange={(e) => {
-                                                            const value = Number(e.target.value);
-                                                            setSlideTransitionDraft((prev) => prev && ({
-                                                                ...prev,
-                                                                duration: Number.isFinite(value) ? value : prev.duration,
-                                                            }));
-                                                        }}
-                                                        className="toolbar-number-input"
-                                                        style={{ width: 64 }}
-                                                        title="Transition duration"
-                                                    />
-                                                    <span className="admin-label">ms</span>
-                                                </>
-                                            )}
-                                            <button
-                                                className="admin-nav-btn"
-                                                onClick={handleSaveSlideTransition}
-                                                disabled={!isSlideTransitionDirty}
-                                                title="Save selected slide transition"
-                                            >Save</button>
-                                            {selectedSlide && isSlideTransitionDirty && (
-                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
-                                            )}
-                                        </div>
-                                        <div className="admin-preview-col-right">
-                                            <label className="admin-label">Slide schedule</label>
-                                            <select
-                                                value={slideScheduleDraft.mode}
-                                                onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, mode: e.target.value as "range" | "daily" }))}
-                                                className="toolbar-number-input"
-                                                style={{ width: 110 }}
-                                                title="Date range = a one-off window. Daily time = recurring every day."
-                                                disabled={!selectedSlide}
-                                            >
-                                                <option value="range">Date range</option>
-                                                <option value="daily">Daily time</option>
-                                            </select>
-                                            {slideScheduleDraft.mode === "range" ? (
-                                                <>
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={slideScheduleDraft.start}
-                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, start: e.target.value }))}
-                                                        className="toolbar-number-input"
-                                                        style={{ width: 190 }}
-                                                        title="Slide becomes eligible for cycling from this date/time (blank = no start restriction)"
-                                                        disabled={!selectedSlide}
-                                                    />
-                                                    <span className="admin-label">to</span>
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={slideScheduleDraft.end}
-                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, end: e.target.value }))}
-                                                        className="toolbar-number-input"
-                                                        style={{ width: 190 }}
-                                                        title="Slide stops being eligible for cycling after this date/time (blank = no end restriction)"
-                                                        disabled={!selectedSlide}
-                                                    />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <input
-                                                        type="time"
-                                                        value={slideScheduleDraft.dailyStart}
-                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, dailyStart: e.target.value }))}
-                                                        className="toolbar-number-input"
-                                                        style={{ width: 90 }}
-                                                        title="Slide cycles in every day from this time"
-                                                        disabled={!selectedSlide}
-                                                    />
-                                                    <span className="admin-label">to</span>
-                                                    <input
-                                                        type="time"
-                                                        value={slideScheduleDraft.dailyEnd}
-                                                        onChange={(e) => setSlideScheduleDraft((prev) => ({ ...prev, dailyEnd: e.target.value }))}
-                                                        className="toolbar-number-input"
-                                                        style={{ width: 90 }}
-                                                        title="Slide cycles out every day at this time (earlier than start = wraps past midnight)"
-                                                        disabled={!selectedSlide}
-                                                    />
-                                                </>
-                                            )}
-                                            <button
-                                                className="admin-nav-btn"
-                                                onClick={handleSaveSlideSchedule}
-                                                disabled={!isSlideScheduleDirty}
-                                                title="Save selected slide schedule"
-                                            >Save</button>
-                                            {selectedSlide && isSlideScheduleDirty && (
-                                                <span className="admin-label" style={{ color: "#f59e0b" }}>Unsaved</span>
-                                            )}
-                                        </div>
-                                    </div>
+                                <span className="admin-preview-bar-spacer" />
 
-                                </div>
-                            </>
-                        )}
+                                {pendingTake ? (
+                                    <div className="admin-take-confirm">
+                                        <span>
+                                            {displayName} is cycling <strong>{selectedDisplayState?.bundle}</strong>.
+                                            Switch it to <strong>{pendingTake.bundle}</strong>?
+                                        </span>
+                                        <button className="admin-nav-btn" onClick={() => setPendingTake(null)}>Cancel</button>
+                                        <button className="admin-nav-btn active" onClick={onPointerClickOnly(confirmPendingTake)}>Switch and take</button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        className="admin-take-btn"
+                                        onClick={onPointerClickOnly(handleTake)}
+                                        disabled={!connected || !effectiveSelectedDisplay || !selectedSlide || previewIsLive}
+                                        title={previewIsLive ? "This slide is already live" : `Send the previewed slide to ${displayName}`}
+                                    >
+                                        <Cast size={17} /> Take ⇨ Live
+                                    </button>
+                                )}
+                            </div>
+
+                            <SlideInspector
+                                open={inspectorOpen}
+                                onToggle={() => setInspectorOpen((open) => !open)}
+                                hasSlide={!!selectedSlide}
+                                summary={inspectorSummary}
+                                durationDraft={slideDurationDraft}
+                                setDurationDraft={setSlideDurationDraft}
+                                durationDirty={isSlideDurationDirty}
+                                onSaveDuration={handleSaveSlideDuration}
+                                transitionDraft={slideTransitionDraft}
+                                setTransitionDraft={setSlideTransitionDraft}
+                                transitionDirty={isSlideTransitionDirty}
+                                onSaveTransition={handleSaveSlideTransition}
+                                scheduleDraft={slideScheduleDraft}
+                                setScheduleDraft={setSlideScheduleDraft}
+                                scheduleDirty={isSlideScheduleDirty}
+                                onSaveSchedule={handleSaveSlideSchedule}
+                            />
+                        </div>
                     </section>
-                </main>
 
-                {/* ── Footer ─────────────────────────────── */}
-                <footer className="admin-footer">
-                    <div className="admin-footer-controls">
-                        <button className="admin-foot-btn" onClick={() => navigate(-1)} disabled={(previewTab === "live" ? eligibleActiveBundleSlides : eligibleSlides).length < 2} title="Previous slide">
-                            <StepBack size={16} />
-                        </button>
-                        <button
-                            className={`admin-foot-btn ${selectedDisplayIsCycling ? "admin-foot-danger" : "admin-foot-primary"}`}
-                            onClick={selectedDisplayIsCycling ? handleStopCycle : handleShowSlide}
-                            disabled={selectedDisplayIsCycling
-                                ? !connected
-                                : !connected || !selectedDisplayBundle || activeBundleSlides.length === 0}
-                            title={selectedDisplayIsCycling ? "Pause cycling" : "Show selected slide"}
-                        >
-                            {state.isCycling ? <Pause size={16} /> : <Play size={16} />}
-                        </button>
-                        <button className="admin-foot-btn" onClick={() => navigate(1)} disabled={(previewTab === "live" ? eligibleActiveBundleSlides : eligibleSlides).length < 2} title="Next slide">
-                            <StepForward size={16} />
-                        </button>
-                        <div className="admin-footer-sep" />
-                        <button className="admin-foot-btn admin-foot-danger" onClick={handleClearSlide} disabled={!selectedDisplayState} title="Blackout">
-                            <CircleOff size={16} />
-                        </button>
-                        <button className="admin-foot-btn" onClick={() => loadBundles()} title="Reload bundles">
-                            <RotateCcw size={15} />
-                        </button>
-                    </div>
-                </footer>
+                    {settingsTab && (
+                        <SettingsDrawer
+                            tabs={settingsTabs}
+                            activeTab={settingsTab}
+                            onTabChange={setSettingsTab}
+                            onClose={closeSettings}
+                        />
+                    )}
+                </main>
 
                 {confirmActivateBundle !== null && (
                     <div className="slide-picker-overlay" onClick={() => setConfirmActivateBundle(null)} style={{ zIndex: 10000 }}>

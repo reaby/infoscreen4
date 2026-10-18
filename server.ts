@@ -187,6 +187,14 @@ function emitDisplayStatesToAll() {
     }
 }
 
+// The active bundle is restored on server start, so it follows whatever bundle is put on air.
+function persistActiveBundle(displayId: string, bundle: string) {
+    const confIndex = displayConfigs.findIndex((c) => c.id === displayId);
+    if (confIndex === -1 || displayConfigs[confIndex].activeBundle === bundle) return;
+    displayConfigs[confIndex] = { ...displayConfigs[confIndex], activeBundle: bundle };
+    setDisplayConfigs(displayConfigs);
+}
+
 function stopCycle(displayId: string) {
     const timer = displayCycleTimers[displayId];
     if (timer) {
@@ -362,6 +370,7 @@ app.prepare().then(() => {
                 const targetId = ensureDisplayId(data.displayId);
                 displayStates[targetId] = { bundle: data.bundle, slide: data.slide, duration: data.duration };
                 displayQueuedNext[targetId] = null;
+                persistActiveBundle(targetId, data.bundle);
                 if (io) {
                     io.to(displayRoom(targetId)).emit("slide:show", enrichSlideData(displayStates[targetId]!));
                 }
@@ -449,12 +458,7 @@ app.prepare().then(() => {
                     startCycle(targetId, displayStates[targetId]!);
                 }
 
-                const confIndex = displayConfigs.findIndex(c => c.id === targetId);
-                if (confIndex !== -1) {
-                    displayConfigs[confIndex] = { ...displayConfigs[confIndex], activeBundle: bundle };
-                    setDisplayConfigs(displayConfigs);
-                }
-
+                persistActiveBundle(targetId, bundle);
                 emitAdminState();
             });
 

@@ -1005,6 +1005,11 @@ canvas {
     color: #81c784;
 }
 
+.admin-now-sep {
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
 .admin-header-nav {
     display: flex;
     align-items: center;
@@ -1100,9 +1105,11 @@ canvas {
 
 /* ── Main 3-column area ─────────────────── */
 .admin-main {
+    position: relative;
     display: flex;
     flex-direction: row;
     flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -1125,10 +1132,6 @@ canvas {
 .admin-col-slides {
     width: 230px;
     flex-shrink: 0;
-}
-
-.admin-col-preview {
-    flex: 1;
 }
 
 .admin-col-header {
@@ -1179,15 +1182,38 @@ canvas {
     color: var(--tb-text);
 }
 
-.admin-display-select {
-    height: 28px;
-    border-radius: 4px;
+.admin-display-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 3px 2px 10px;
+    margin-right: 6px;
     border: 1px solid var(--tb-border);
-    background: var(--tb-surface);
+    border-radius: 6px;
+    background: var(--tb-surface-low);
+}
+
+.admin-display-picker label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tb-text-muted);
+}
+
+.admin-display-select {
+    height: 26px;
+    border-radius: 4px;
+    border: 1px solid var(--tb-divider);
+    background: var(--tb-bg-deep);
     color: var(--tb-text);
     padding: 0 4px;
-    margin-right: 6px;
     font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-nav-btn.active {
+    background: #1e3346;
+    border-color: var(--tb-accent-border);
 }
 
 .admin-display-config-panel {
@@ -1282,28 +1308,6 @@ canvas {
     font-weight: 700;
 }
 
-.admin-list-item.playing {
-    border-color: rgba(129, 199, 132, 0.8);
-    box-shadow: inset 0 0 0 2px #2d5a2d;
-    outline-offset: -1px;
-}
-
-.admin-list-item.playing .admin-list-item-name {
-    color: #e0f8c8;
-    font-weight: 700;
-}
-
-.admin-list-item.playing .admin-slide-toggle {
-    color: #e0f8c8;
-    border-color: rgba(129, 199, 132, 0.65);
-    opacity: 1;
-}
-
-.admin-list-item.selected.playing {
-    border-color: rgba(129, 199, 132, 0.8);
-    box-shadow: inset 0 0 0 2px #2d5a2d;
-}
-
 .admin-list-item.selected::before {
     content: "";
     position: absolute;
@@ -1313,15 +1317,6 @@ canvas {
     width: 2px;
     background:rgba(129, 199, 132, 0.8);
     border-radius: 999px;
-}
-
-.admin-list-item.selected.playing .admin-list-item-name {
-    color: #ffffff;
-}
-
-.admin-list-item.selected.playing .admin-playing-icon {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.18);
 }
 
 .admin-list-item-draggable {
@@ -1370,24 +1365,6 @@ canvas {
 .admin-list-item.selected .admin-list-item-count {
     background: rgba(255, 255, 255, 0.2);
     color: rgba(255, 255, 255, 0.8);
-}
-
-.admin-playing-icon {
-    flex-shrink: 0;
-    color: #d4fcb7;
-    background: rgba(129, 199, 132, 0.18);
-    border-radius: 50%;
-    padding: 2px;
-}
-
-.admin-playing-icon-placeholder {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    min-width: 20px;
-    height: 20px;
-    margin-right: 4px;
 }
 
 .admin-slide-toggle {
@@ -1446,16 +1423,482 @@ canvas {
     opacity: 1;
 }
 
-/* ── Preview column ─────────────────────── */
-.admin-preview-area {
+/* ── Studio column: preview + live picture-in-picture ── */
+.admin-col-studio {
     flex: 1;
+    min-width: 0;
+}
+
+.admin-studio-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.admin-studio-crumb {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+    color: var(--tb-text);
+}
+
+.admin-studio-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px 0;
+}
+
+/* The preview fills this area; the live view floats over its top-right corner. */
+.admin-monitors {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
+
+/* Sized as a container so the monitor can fit by width or height, whichever runs out first. */
+.admin-monitor-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    container-type: size;
+    display: grid;
+    place-items: start center;
+}
+
+.admin-monitor {
+    --monitor-ar: 1.7778;
     position: relative;
     overflow: hidden;
+    border-radius: 4px;
     background: #111;
     display: flex;
     align-items: center;
     justify-content: center;
     container-type: inline-size;
+    aspect-ratio: var(--monitor-ar);
+}
+
+.admin-monitor-main > .admin-monitor {
+    width: min(100cqw, calc(100cqh * var(--monitor-ar)));
+}
+
+.admin-monitor-preview {
+    box-shadow: 0 0 0 2px #3c4a3c;
+}
+
+.admin-monitor-live {
+    box-shadow: 0 0 0 3px #e53935;
+}
+
+.admin-monitor-tag {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ddd;
+    pointer-events: none;
+}
+
+.admin-monitor-tag.live {
+    background: #e53935;
+    color: #fff;
+}
+
+.admin-monitor-tag.live::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+    animation: admin-live-blink 1.2s ease-in-out infinite;
+}
+
+.admin-live-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 8;
+    width: clamp(220px, 26%, 380px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--tb-border);
+    border-radius: 8px;
+    background: rgba(26, 26, 26, 0.94);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    container-type: inline-size;
+}
+
+/* Narrow panel: icon-only buttons so all four still fit. */
+@container (max-width: 300px) {
+    .admin-live-btn-label {
+        display: none;
+    }
+}
+
+.admin-live-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.admin-live-what {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--tb-text-muted);
+}
+
+.admin-live-what strong {
+    color: var(--tb-text);
+}
+
+.admin-live-state {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--tb-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-live-swap {
+    position: relative;
+}
+
+.admin-live-swap > .admin-monitor {
+    width: 100%;
+}
+
+.admin-live-swap-hint {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    border: none;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.admin-live-swap-hint:hover,
+.admin-live-swap-hint:focus-visible {
+    opacity: 1;
+}
+
+.admin-live-progress {
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--tb-divider);
+}
+
+.admin-live-progress i {
+    display: block;
+    height: 100%;
+    background: #e53935;
+    animation-name: admin-live-progress;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+}
+
+@keyframes admin-live-progress {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+.admin-live-controls {
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid rgba(229, 57, 53, 0.4);
+    border-radius: 6px;
+    background: rgba(229, 57, 53, 0.12);
+}
+
+.admin-live-btn {
+    flex: 1;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 5px;
+    border: 1px solid var(--tb-border);
+    background: var(--tb-surface-low);
+    color: var(--tb-text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.admin-live-btn.wide {
+    flex: 1.8;
+}
+
+.admin-live-btn:hover:not(:disabled) {
+    background: var(--tb-surface);
+}
+
+.admin-live-btn.danger {
+    background: #4a1c1c;
+    border-color: var(--tb-danger);
+    color: var(--tb-danger-text);
+}
+
+.admin-live-btn.danger:hover:not(:disabled) {
+    background: var(--tb-danger);
+}
+
+.admin-live-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.admin-preview-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+}
+
+.admin-preview-bar-spacer {
+    flex: 1;
+}
+
+.admin-take-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 44px;
+    padding: 0 22px;
+    border-radius: 6px;
+    border: 1px solid #b71c1c;
+    background: #c62828;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.admin-take-btn:hover:not(:disabled) {
+    background: #d32f2f;
+}
+
+.admin-take-btn:disabled {
+    background: var(--tb-surface-low);
+    border-color: var(--tb-border);
+    color: var(--tb-text-disabled);
+    cursor: not-allowed;
+}
+
+.admin-take-confirm {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px 6px 12px;
+    border: 1px solid #8a6d1a;
+    border-radius: 6px;
+    background: #3a3015;
+    font-size: 12px;
+}
+
+/* Slide properties: the header sits in the layout, the body opens upward over the monitors. */
+.admin-inspector {
+    position: relative;
+    flex-shrink: 0;
+    margin: 0 -16px;
+    border-top: 1px solid var(--tb-border);
+    background: var(--tb-bg);
+}
+
+.admin-inspector-head {
+    width: 100%;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    border: none;
+    background: none;
+    color: var(--tb-text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-inspector-head:hover {
+    color: var(--tb-text);
+}
+
+.admin-inspector-chevron {
+    transition: transform 0.15s;
+}
+
+.admin-inspector.open .admin-inspector-chevron {
+    transform: rotate(90deg);
+}
+
+.admin-inspector-summary {
+    margin-left: 6px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tb-text-disabled);
+}
+
+.admin-inspector-body {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 28px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--tb-border);
+    background: var(--tb-bg);
+    box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.admin-inspector-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.admin-inspector-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-unsaved {
+    color: #f59e0b;
+}
+
+/* Settings slide-over */
+.admin-drawer-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.admin-drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 21;
+    width: min(640px, 100%);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--tb-border);
+    background: var(--tb-bg);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.4);
+}
+
+.admin-drawer-tabs {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 40px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--tb-border);
+}
+
+.admin-drawer-tab {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: -1px;
+    padding: 7px 14px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 5px 5px 0 0;
+    background: none;
+    color: var(--tb-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.admin-drawer-tab:hover:not(:disabled) {
+    color: var(--tb-text);
+}
+
+.admin-drawer-tab.active {
+    border-color: var(--tb-border);
+    background: var(--tb-bg-deep);
+    color: var(--tb-text);
+}
+
+.admin-drawer-tab:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.admin-drawer-close {
+    align-self: center;
+    margin-left: auto;
+}
+
+.admin-drawer-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background: var(--tb-bg-deep);
+}
+
+/* Slide list: the slide on air gets a red edge, separate from the green selection. */
+.admin-list-item.playing {
+    border-color: rgba(229, 57, 53, 0.75);
+    box-shadow: inset 3px 0 0 #e53935;
+}
+
+.admin-live-tag {
+    flex-shrink: 0;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #e53935;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
 .admin-preview-lower-third .lower-third-line {
@@ -1544,43 +1987,6 @@ canvas {
     z-index: 1;
 }
 
-.admin-preview-controls {
-    padding: 8px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    background: var(--tb-bg);
-    border-top: 1px solid var(--tb-border);
-    flex-shrink: 0;
-}
-
-.admin-preview-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.admin-preview-row-two-col {
-    width: 100%;
-    gap: 12px;
-}
-
-.admin-preview-col-left {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    flex: 1;
-}
-
-.admin-preview-col-right {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-left: auto;
-}
-
 .admin-label {
     font-size: 11px;
     color: var(--tb-text-muted);
@@ -1627,77 +2033,6 @@ canvas {
 
 .admin-stop-btn:hover {
     background: var(--tb-danger-hover);
-}
-
-/* ── Footer ─────────────────────────────── */
-.admin-footer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 16px;
-    height: 48px;
-    flex-shrink: 0;
-    background: var(--tb-bg);
-    border-top: 1px solid var(--tb-border);
-}
-
-.admin-footer-controls {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.admin-footer-sep {
-    width: 1px;
-    height: 24px;
-    background: var(--tb-divider);
-    margin: 0 4px;
-}
-
-.admin-foot-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
-    border: 1px solid var(--tb-border);
-    background: var(--tb-surface-low);
-    color: var(--tb-text);
-    cursor: pointer;
-    transition: background 0.1s, border-color 0.1s, color 0.1s;
-}
-
-.admin-foot-btn:hover:not(:disabled) {
-    background: var(--tb-surface);
-    border-color: var(--tb-accent-border);
-}
-
-.admin-foot-btn:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-}
-
-.admin-foot-btn.admin-foot-primary {
-    background: var(--tb-accent);
-    border-color: var(--tb-accent-border);
-    color: #fff;
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-}
-
-.admin-foot-btn.admin-foot-primary:hover:not(:disabled) {
-    background: var(--tb-accent-border);
-}
-
-.admin-foot-btn.admin-foot-danger {
-    border-color: var(--tb-danger);
-    color: var(--tb-danger-text);
-}
-
-.admin-foot-btn.admin-foot-danger:hover:not(:disabled) {
-    background: var(--tb-danger);
 }
 
 /* ── Bundle settings panel ──────────────── */
@@ -2132,77 +2467,6 @@ canvas {
 .fm-upload-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-}
-
-/* ── Preview tab switcher ───────────────── */
-.admin-preview-header-row {
-    position: relative;
-    display: flex;
-    align-items: center;
-    width: 100%;
-    min-height: 24px;
-}
-
-.admin-preview-tabs-left {
-    display: flex;
-    gap: 4px;
-    z-index: 1;
-}
-
-.admin-preview-header-title {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: 45%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--tb-text-muted);
-    text-transform: none;
-    letter-spacing: 0;
-    pointer-events: none;
-}
-
-.admin-preview-tab-live-edge {
-    margin-left: auto;
-    z-index: 1;
-}
-
-.admin-preview-tab {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
-    border-radius: 4px;
-    /* reset inherited .admin-col-header styles */
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: none;
-    /* visible resting state */
-    border: 1px solid var(--tb-border);
-    background: var(--tb-surface-low);
-    color: var(--tb-text-muted);
-    cursor: pointer;
-    transition: background 0.1s, color 0.1s, border-color 0.1s;
-}
-
-.admin-preview-tab:hover {
-    color: var(--tb-text);
-    background: var(--tb-surface);
-}
-
-.admin-preview-tab.active {
-    color: var(--tb-text);
-    background: var(--tb-surface);
-    border-color: var(--tb-accent-border);
-}
-
-.admin-preview-tab.live.active {
-    border-color: #2e7d32;
-    color: #81c784;
 }
 
 .admin-live-dot {
