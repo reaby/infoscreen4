@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSocket } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward, Cast,
-    Play, FolderPlus, RefreshCw, Settings, Zap, FilePlus, FolderOpen, User, ChevronDown, ChevronRight, Globe, Radio, Clock, Video, SkipForward, Megaphone
+    Play, FolderPlus, RefreshCw, Settings, Zap, FilePlus, FolderOpen, LogOut, ChevronRight, Globe, Radio, Clock, Video, SkipForward, Megaphone
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
@@ -105,8 +105,6 @@ export default function AdminDashboard() {
         });
     };
     const [currentUser, setCurrentUser] = useState<string | null>(null);
-    const [userMenuOpen, setUserMenuOpen] = useState(false);
-    const userMenuRef = useRef<HTMLDivElement | null>(null);
     const { connected, state, showSlide, clearSlide, stopCycle, queueNextSlide, updateBundleMeta, activateBundle, updateDisplayConfig, bundleMetaUpdate, showStream, clearStream, showAnnouncement, showAnnouncementAll, clearAnnouncementAll, socketRef } = useSocket("admin");
     const [bundles, setBundles] = useState<BundleInfo[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState<string | null>(null);
@@ -146,19 +144,7 @@ export default function AdminDashboard() {
         };
     }, [router]);
 
-    useEffect(() => {
-        if (!userMenuOpen) return;
-        const handleClick = (event: MouseEvent) => {
-            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-                setUserMenuOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
-    }, [userMenuOpen]);
-
     const handleLogout = useCallback(async () => {
-        setUserMenuOpen(false);
         await fetch("/api/auth", { method: "DELETE" });
         router.replace("/");
     }, [router]);
@@ -1077,37 +1063,14 @@ export default function AdminDashboard() {
                             <Settings size={13} /> Settings
                         </button>
 
-                        <div className="admin-user-menu" ref={userMenuRef}>
-                            <button
-                                className="admin-nav-btn admin-user-menu-trigger"
-                                type="button"
-                                onClick={() => setUserMenuOpen((current) => !current)}
-                                title="User menu"
-                            >
-                                <User size={13} />
-                                <span>{currentUser ?? "Admin"}</span>
-                                <ChevronDown size={12} />
-                            </button>
-                            {userMenuOpen && (
-                                <div className="admin-user-menu-popover">
-                                    <div className="admin-user-menu-title">Signed in as</div>
-                                    <div className="admin-user-menu-username">{currentUser ?? "unknown"}</div>
-                                    <button
-                                        className="admin-user-menu-item"
-                                        type="button"
-                                        onClick={() => {
-                                            setSettingsTab("users");
-                                            setUserMenuOpen(false);
-                                        }}
-                                    >
-                                        Users
-                                    </button>
-                                    <button className="admin-user-menu-item" type="button" onClick={handleLogout}>
-                                        Logout
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <button
+                            className="admin-nav-btn"
+                            type="button"
+                            onClick={handleLogout}
+                            title={currentUser ? `Signed in as ${currentUser}` : undefined}
+                        >
+                            <LogOut size={13} /> Logout
+                        </button>
                     </nav>
                 </header>
 

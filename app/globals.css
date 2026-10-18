@@ -1017,60 +1017,6 @@ canvas {
     margin-left: auto;
 }
 
-.admin-user-menu {
-    position: relative;
-}
-
-.admin-user-menu-trigger {
-    min-width: 130px;
-    justify-content: space-between;
-}
-
-.admin-user-menu-popover {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 8px);
-    width: 200px;
-    padding: 10px 0;
-    border-radius: 16px;
-    background: var(--tb-bg);
-    border: 1px solid var(--tb-border);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
-    z-index: 20;
-}
-
-.admin-user-menu-title {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--tb-text-muted);
-    padding: 10px 14px;
-}
-
-.admin-user-menu-username {
-    padding: 0 14px 12px;
-    color: var(--tb-text);
-    font-weight: 600;
-    word-break: break-word;
-}
-
-.admin-user-menu-item {
-    width: 100%;
-    text-align: left;
-    padding: 10px 14px;
-    border: none;
-    background: transparent;
-    color: var(--tb-text);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.admin-user-menu-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
 .admin-nav-btn {
     display: flex;
     align-items: center;

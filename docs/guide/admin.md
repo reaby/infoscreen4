@@ -16,7 +16,7 @@ Open `/admin` and sign in. Everything you need while the event runs is on this p
 
 ![The admin interface: preview with the live view in the top-right corner]({{ '/assets/images/screenshots/admin-overview.png' | relative_url }})
 
-- **Header**: connection status, number of connected clients, and the display you control with the bundle and slide it is showing now. On the right are the **Controlling** display selector, the **Live** toggle, **Reload bundles**, the **announcement** button, **Settings** and the **user menu**.
+- **Header**: connection status, number of connected clients, and the display you control with the bundle and slide it is showing now. On the right are the **Controlling** display selector, the **Live** toggle, **Reload bundles**, the **announcement** button, **Settings** and **Logout** (hover it to see who is signed in).
 - **Bundles**: list of bundles. The badge shows the number of slides. The ⚡ button makes the bundle active on the selected display. Right-click a bundle to **rename**, **duplicate** or **delete** it.
 - **Slides**: the slides of the selected bundle, in playback order. Drag to reorder. The slide on screen now has a red edge and a **LIVE** tag.
 - **Preview**: the selected slide, filling the main area. Under it are the preview navigation, **Edit slide** and the **Take ⇨ Live** button.
