@@ -651,22 +651,12 @@ export default function AdminDashboard() {
         const res = await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(name)}`);
         if (!res.ok) return;
         const body = await res.text();
+        // The slide endpoint also registers the new entry in the bundle meta.
         await fetch(`/api/bundles/${encodeURIComponent(bundle)}/slides/${encodeURIComponent(newName)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body,
         });
-
-        // Add to bundle meta as well
-        const meta = await fetch(`/api/bundles/${encodeURIComponent(bundle)}`).then(r => r.json());
-        if (meta && Array.isArray(meta.slides)) {
-            meta.slides.push(newName);
-            await fetch(`/api/bundles/${encodeURIComponent(bundle)}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ slides: meta.slides })
-            });
-        }
 
         await loadBundles();
         setSelectedSlide(newName);
