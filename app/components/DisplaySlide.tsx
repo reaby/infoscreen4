@@ -5,7 +5,7 @@ import Image from "next/image";
 import * as fabric from "fabric";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import "./fabricEnv"; // side-effect: frees the memory of elements Fabric disposes
-import { FabricVideo } from "./FabricVideo"; // also registers FabricVideo in classRegistry
+import { containsVideo } from "./FabricVideo"; // also registers FabricVideo in classRegistry
 import ManagedVideo from "./ManagedVideo";
 import { disposeObjectsOnRemove, loadFabricJsonSafely } from "./fabricLoadHelpers";
 import { preloadFabricFonts, refreshTextMetrics } from "./fabricFonts";
@@ -65,11 +65,16 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
 
         // Drive video frame updates. Static slides are redrawn only when something
         // changes, so they don't keep the GPU busy with identical frames.
+        let hasVideo = false;
+        const updateHasVideo = () => { hasVideo = containsVideo(c.getObjects()); };
+        c.on("object:added", updateHasVideo);
+        c.on("object:removed", updateHasVideo);
+
         let running = true;
         const render = () => {
             if (!running || fabricRef.current !== c) return;
             try {
-                if (c.getObjects().some((obj) => obj instanceof FabricVideo)) c.requestRenderAll();
+                if (hasVideo) c.requestRenderAll();
             } catch {
                 // Keep the loop alive; some browsers can throw transiently during media decode.
             }

@@ -90,5 +90,18 @@ export class FabricVideo extends fabric.FabricImage {
     }
 }
 
+/**
+ * True when any object (including inside groups) draws a <video>, i.e. the canvas
+ * must be redrawn every frame. Checks the element rather than the class, so it also
+ * holds for objects created before a hot reload replaced the FabricVideo class.
+ */
+export function containsVideo(objects: fabric.FabricObject[]): boolean {
+    return objects.some((obj) =>
+        obj instanceof fabric.Group
+            ? containsVideo(obj.getObjects())
+            : obj instanceof fabric.FabricImage && obj.getElement() instanceof HTMLVideoElement
+    );
+}
+
 // Register so loadFromJSON can reconstruct FabricVideo by type name
 fabric.classRegistry.setClass(FabricVideo);
