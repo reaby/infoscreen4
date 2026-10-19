@@ -19,7 +19,7 @@ Open `/admin` and sign in. Everything you need while the event runs is on this p
 - **Header**: connection status, number of connected clients, and the display you control with the bundle and slide it is showing now. On the right are the **Controlling** display selector, the **Live** toggle, **Reload bundles**, the **announcement** button, **Settings** and **Logout** (hover it to see who is signed in).
 - **Bundles**: list of bundles. The badge shows the number of slides. The ⚡ button makes the bundle active on the selected display. Right-click a bundle to **rename**, **duplicate** or **delete** it.
 - **Slides**: the slides of the selected bundle, in playback order. Drag to reorder. The slide on screen now has a red edge and a **LIVE** tag.
-- **Preview**: the selected slide, filling the main area. Under it are the preview navigation, **Edit slide** and the **Take ⇨ Live** button.
+- **Preview**: the selected slide, filling the main area. Under it are the preview navigation, **Edit slide** and the **Send to LIVE** button.
 - **Live view**: a small window in the top-right corner showing what the selected display shows right now, with its [playback controls](#playback-control).
 - **Slide properties**: a collapsible bar at the bottom with the [per-slide overrides](#per-slide-overrides).
 
@@ -37,7 +37,7 @@ Click the **New bundle** button at the top of the bundle list and enter a name.
 
 Choose the display in the **Controlling** selector, then click the ⚡ button on the bundle. The display starts playing the bundle from its first slide.
 
-You can also start a bundle at a specific slide with [Take ⇨ Live](#take-a-slide-live).
+You can also start a bundle at a specific slide with [Send to LIVE](#send-a-slide-to-live).
 
 ### Bundle settings
 
@@ -123,14 +123,14 @@ The admin separates what you are looking at from what is on screen:
 - **Preview** (grey frame) is only for you. Selecting a slide in the list, or stepping with the ◀ ▶ buttons under the preview, never changes the display.
 - **Live** (red frame) is what the display in the **Controlling** selector shows right now.
 
-### Take a slide live
+### Send a slide to live
 
-Select a slide, then click **Take ⇨ Live**. The display shows the slide and keeps cycling the bundle from there. The button is greyed out when the previewed slide is already live.
+Select a slide, then click **Send to LIVE**. The display shows the slide and keeps cycling the bundle from there. The button is greyed out when the previewed slide is already live.
 
 If the slide belongs to a different bundle than the one the display is cycling, the admin asks you to confirm the switch first. The new bundle then becomes the display's active bundle.
 
 {: .note }
-Take ⇨ Live works only with a mouse click. It has no keyboard shortcut, and pressing Enter or Space on the button does nothing, so a stray key press can't change what is on screen.
+Send to LIVE works only with a mouse click. It has no keyboard shortcut, and pressing Enter or Space on the button does nothing, so a stray key press can't change what is on screen.
 
 ### Live view
 

@@ -1025,7 +1025,7 @@ export default function AdminDashboard() {
                                     className="admin-display-select"
                                     value={effectiveSelectedDisplay ?? ""}
                                     onChange={(e) => setSelectedDisplay(e.target.value)}
-                                    title="The display that TAKE and the live controls act on"
+                                    title="The display that Send to LIVE and the live controls act on"
                                 >
                                     {state.displayConfigs.map((conf) => (
                                         <option key={conf.id} value={conf.id}>{conf.name}</option>
@@ -1453,7 +1453,7 @@ export default function AdminDashboard() {
                                         disabled={!connected || !effectiveSelectedDisplay || !selectedSlide || previewIsLive}
                                         title={previewIsLive ? "This slide is already live" : `Send the previewed slide to ${displayName}`}
                                     >
-                                        <Cast size={17} /> Take ⇨ Live
+                                        <Cast size={17} /> Send to LIVE
                                     </button>
                                 )}
                             </div>

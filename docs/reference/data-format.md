@@ -99,7 +99,7 @@ Editor slides, in Fabric.js canvas JSON format. These are global: any bundle can
 |:--|:--|
 | `id` | Used in the display URL: `/display/<id>`. |
 | `name` | Name shown in the admin. |
-| `activeBundle` | Bundle the display plays. Updated when a bundle goes on air with ⚡ or Take ⇨ Live, and restored when the server starts. |
+| `activeBundle` | Bundle the display plays. Updated when a bundle goes on air with ⚡ or Send to LIVE, and restored when the server starts. |
 
 ## `users.json`
 
