@@ -205,6 +205,8 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
         ? `/api/files/backgrounds/${encodeURIComponent(backgroundFile)}`
         : null;
     const fileIsVideo = backgroundFile ? isVideo(backgroundFile) : false;
+    // Website, video and image slides draw their own element instead of the fabric canvas.
+    const usesCanvas = !activeEntry || activeEntry.type === "fabric";
 
     return (
         <div
@@ -313,7 +315,17 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                         style={{ width: "100%", height: "100%", objectFit: "contain", position: "absolute", inset: 0, zIndex: 1 }}
                     />
                 )}
-                <canvas ref={canvasRef} className="ds-canvas" style={activeEntry?.type === "website" || activeEntry?.type === "video" ? { display: "none" } : undefined} />
+                {activeEntry?.type === "image" && (
+                    <Image
+                        key={activeEntry.data}
+                        src={`/api/files/images/${encodeURIComponent(activeEntry.data)}`}
+                        alt=""
+                        fill
+                        unoptimized
+                        style={{ objectFit: "contain", zIndex: 1 }}
+                    />
+                )}
+                <canvas ref={canvasRef} className="ds-canvas" style={usesCanvas ? undefined : { display: "none" }} />
                 {showMissingAssetWarning && hasMissingAssets && (
                     <div
                         style={{

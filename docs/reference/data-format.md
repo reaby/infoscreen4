@@ -52,8 +52,8 @@ Bundle settings and the ordered slide list. The folder name is the bundle name.
 | Field | Type | Description |
 |:--|:--|:--|
 | `id` | string | Unique ID within the bundle. |
-| `type` | `fabric` \| `video` \| `website` | Slide type. |
-| `data` | string | `fabric`: file name in `slides/`. `video`: file name in `videos/`. `website`: URL. |
+| `type` | `fabric` \| `video` \| `image` \| `website` | Slide type. |
+| `data` | string | `fabric`: file name in `slides/`. `video`: file name in `videos/`. `image`: file name in `images/`. `website`: URL. |
 | `title` | string | Name shown in the admin. |
 | `active` | boolean | Default `true`. `false` skips the slide during playback. |
 | `duration` | number | Overrides the bundle duration for this slide (seconds). |

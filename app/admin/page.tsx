@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSocket } from "../hooks/useSocket";
 import {
     Monitor, MonitorOff, Pencil, StepBack, StepForward, Cast,
-    Play, FolderPlus, RefreshCw, Settings, Zap, FilePlus, FolderOpen, LogOut, ChevronRight, Globe, Radio, Clock, Video, SkipForward, Megaphone
+    Play, FolderPlus, RefreshCw, Settings, Zap, FilePlus, FolderOpen, LogOut, ChevronRight, Globe, Radio, Clock, Video, ImageIcon, SkipForward, Megaphone
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
@@ -23,6 +23,18 @@ import LivePanel from "../components/LivePanel";
 import SlideInspector, { SlideScheduleDraft } from "../components/SlideInspector";
 import SettingsDrawer, { DrawerTab } from "../components/SettingsDrawer";
 import DisplayConfigPanel from "../components/DisplayConfigPanel";
+
+type MediaSlideKind = "video" | "image";
+
+interface MediaSlidePicker {
+    kind: MediaSlideKind;
+    target: "new" | string;
+}
+
+const MEDIA_BASE_PATH: Record<MediaSlideKind, string> = {
+    video: "/api/files/videos",
+    image: "/api/files/images",
+};
 
 interface BundleInfo {
     name: string;
@@ -170,8 +182,8 @@ export default function AdminDashboard() {
     const [confirmActivateBundle, setConfirmActivateBundle] = useState<string | null>(null);
     const [displayActiveStreams, setDisplayActiveStreams] = useState<Record<string, string>>({});
     const [globalSlidePickerOpen, setGlobalSlidePickerOpen] = useState(false);
-    // null = closed; "new" = adding a new video slide; a slide id = replacing that slide's video
-    const [videoSlidePicker, setVideoSlidePicker] = useState<string | null>(null);
+    // null = closed; target "new" = adding a new media slide; a slide id = replacing that slide's file
+    const [mediaSlidePicker, setMediaSlidePicker] = useState<MediaSlidePicker | null>(null);
     const [announcementDialogOpen, setAnnouncementDialogOpen] = useState(false);
     const bundleMetaRef = useRef<BundleMeta>({});
     const liveLoadSeqRef = useRef(0);
@@ -417,7 +429,7 @@ export default function AdminDashboard() {
                 setLiveJson(liveSocketJson as object | null);
                 return;
             }
-            // Website/video slides have no fabric JSON on disk — fetching it always 400s.
+            // Website/video/image slides have no fabric JSON on disk — fetching it always 400s.
             const entryType = resolvedMeta.slides?.find((s) => s.id === liveSlide)?.type;
             if (entryType && entryType !== "fabric") {
                 setLiveJson(null);
@@ -449,7 +461,7 @@ export default function AdminDashboard() {
             });
             return;
         }
-        // Website/video slides have no fabric JSON on disk — fetching it always 400s.
+        // Website/video/image slides have no fabric JSON on disk — fetching it always 400s.
         if (selectedEntry && selectedEntry.type !== "fabric") {
             defer(() => {
                 setPreviewJson(null);
@@ -693,38 +705,49 @@ export default function AdminDashboard() {
         }
     };
 
-    const handleVideoSlideSelected = async (filename: string, _url: string, duration?: number) => {
-        if (!selectedBundle) return;
-        const target = videoSlidePicker;
-        setVideoSlidePicker(null);
-        if (!target) return;
+    const createMediaSlideEntry = (kind: MediaSlideKind, filename: string, duration?: number): BundleSlideEntry => {
+        const entry: BundleSlideEntry = {
+            id: Date.now().toString(),
+            type: kind,
+            data: filename,
+            title: filename,
+            active: true,
+        };
+        if (kind === "video") {
+            entry.videoDuration = duration;
+            entry.duration = duration !== undefined ? Math.round(duration) : undefined;
+        }
+        return entry;
+    };
 
-        if (target === "new") {
-            const nextSlides: BundleSlideEntry[] = [...(bundleMeta?.slides || []), {
-                id: Date.now().toString(),
-                type: "video" as const,
-                data: filename,
-                videoDuration: duration,
-                duration: duration !== undefined ? Math.round(duration) : undefined,
-                title: filename,
-                active: true,
-            }];
-            await saveMeta({ slides: nextSlides });
+    const replaceMediaSlideFile = (entry: BundleSlideEntry, filename: string, duration?: number): BundleSlideEntry => {
+        if (entry.type !== "video") return { ...entry, data: filename };
+        // A duration that still matches the old video's length follows the new video.
+        const keepDuration = entry.videoDuration !== undefined && entry.duration === Math.round(entry.videoDuration);
+        return {
+            ...entry,
+            data: filename,
+            videoDuration: duration,
+            duration: !keepDuration ? entry.duration : (duration !== undefined ? Math.round(duration) : entry.duration),
+        };
+    };
+
+    const handleMediaSlideSelected = async (filename: string, _url: string, duration?: number) => {
+        const picker = mediaSlidePicker;
+        setMediaSlidePicker(null);
+        if (!selectedBundle || !picker) return;
+
+        if (picker.target === "new") {
+            const newEntry = createMediaSlideEntry(picker.kind, filename, duration);
+            await saveMeta({ slides: [...(bundleMeta?.slides || []), newEntry] });
             await loadBundles();
-            setSelectedSlide(nextSlides[nextSlides.length - 1].id);
+            setSelectedSlide(newEntry.id);
             return;
         }
 
-        const nextSlides = (bundleMeta.slides || []).map((entry) => {
-            if (entry.id !== target) return entry;
-            const keepDuration = entry.videoDuration !== undefined && entry.duration === Math.round(entry.videoDuration);
-            return {
-                ...entry,
-                data: filename,
-                videoDuration: duration,
-                duration: !keepDuration ? entry.duration : (duration !== undefined ? Math.round(duration) : entry.duration),
-            };
-        });
+        const nextSlides = (bundleMeta.slides || []).map((entry) =>
+            entry.id === picker.target ? replaceMediaSlideFile(entry, filename, duration) : entry
+        );
         saveMeta({ slides: nextSlides });
     };
 
@@ -1117,12 +1140,13 @@ export default function AdminDashboard() {
                         />
                     )}
 
-                    {videoSlidePicker !== null && (
+                    {mediaSlidePicker !== null && (
                         <FileManagerDialog
-                            basePath="/api/files/videos"
-                            probeVideoDuration
-                            onSelect={handleVideoSlideSelected}
-                            onClose={() => setVideoSlidePicker(null)}
+                            key={mediaSlidePicker.kind}
+                            basePath={MEDIA_BASE_PATH[mediaSlidePicker.kind]}
+                            probeVideoDuration={mediaSlidePicker.kind === "video"}
+                            onSelect={handleMediaSlideSelected}
+                            onClose={() => setMediaSlidePicker(null)}
                         />
                     )}
 
@@ -1256,11 +1280,19 @@ export default function AdminDashboard() {
                                 </button>
                                 <button
                                     className="admin-icon-btn"
-                                    onClick={() => setVideoSlidePicker("new")}
+                                    onClick={() => setMediaSlidePicker({ kind: "video", target: "new" })}
                                     title={selectedBundle ? "Add video slide" : "Select a bundle first"}
                                     disabled={!selectedBundle}
                                 >
                                     <Video size={14} />
+                                </button>
+                                <button
+                                    className="admin-icon-btn"
+                                    onClick={() => setMediaSlidePicker({ kind: "image", target: "new" })}
+                                    title={selectedBundle ? "Add image slide" : "Select a bundle first"}
+                                    disabled={!selectedBundle}
+                                >
+                                    <ImageIcon size={14} />
                                 </button>
                             </div>
                         </div>
@@ -1299,8 +1331,10 @@ export default function AdminDashboard() {
                                                         }
                                                     },
                                                     existingEntry?.type === "video"
-                                                        ? { label: "Replace Video", onClick: () => setVideoSlidePicker(slide) }
-                                                        : { label: existingEntry?.type === "website" ? "Edit URL" : "Rename File", onClick: () => handleRenameSlide(selectedBundle!, slide) },
+                                                        ? { label: "Replace Video", onClick: () => setMediaSlidePicker({ kind: "video", target: slide }) }
+                                                        : existingEntry?.type === "image"
+                                                            ? { label: "Replace Image", onClick: () => setMediaSlidePicker({ kind: "image", target: slide }) }
+                                                            : { label: existingEntry?.type === "website" ? "Edit URL" : "Rename File", onClick: () => handleRenameSlide(selectedBundle!, slide) },
                                                     { label: "Duplicate Slide", onClick: () => handleDuplicateSlide(selectedBundle!, slide) },
                                                     { label: "Delete Slide", danger: true, onClick: () => handleDeleteSlide(selectedBundle!, slide) }
                                                 ]
@@ -1422,8 +1456,12 @@ export default function AdminDashboard() {
                                             <Pencil size={13} /> Edit URL
                                         </button>
                                     ) : previewEntry?.type === "video" ? (
-                                        <button className="admin-nav-btn" onClick={() => setVideoSlidePicker(selectedSlide)}>
+                                        <button className="admin-nav-btn" onClick={() => setMediaSlidePicker({ kind: "video", target: selectedSlide })}>
                                             <Video size={13} /> Replace Video
+                                        </button>
+                                    ) : previewEntry?.type === "image" ? (
+                                        <button className="admin-nav-btn" onClick={() => setMediaSlidePicker({ kind: "image", target: selectedSlide })}>
+                                            <ImageIcon size={13} /> Replace Image
                                         </button>
                                     ) : (
                                         <Link

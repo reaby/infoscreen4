@@ -3,8 +3,8 @@ import { SlideSchedule } from "../lib/schedule";
 
 export interface BundleSlideEntry {
     id: string;            // unique identifier (e.g. timestamp or file slug)
-    type: "fabric" | "website" | "video";
-    data: string;          // filename for fabric/video type, or URL for website type
+    type: "fabric" | "website" | "video" | "image";
+    data: string;          // filename for fabric/video/image type, or URL for website type
     title?: string;        // display name
     active?: boolean;      // defaults to true
     duration?: number;     // optional per-slide override (seconds)

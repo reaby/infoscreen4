@@ -224,7 +224,7 @@ export class BundleManager {
             const title = (candidate as any).title;
 
             if (typeof id !== "string" || !id) continue;
-            if (type !== "fabric" && type !== "website" && type !== "video") continue;
+            if (type !== "fabric" && type !== "website" && type !== "video" && type !== "image") continue;
             if (typeof data !== "string" || !data) continue;
 
             if (seen.has(id)) continue;

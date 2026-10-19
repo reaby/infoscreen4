@@ -67,6 +67,7 @@ The buttons at the top of the slide list add:
 - **Assign existing global slide**: an editor slide from the shared library.
 - **Add website slide**: a URL shown full-screen in an iframe. If you leave out `https://`, it is added for you.
 - **Add video slide**: a full-screen video from the video library.
+- **Add image slide**: a single image from the image library. It is fitted inside the bundle's screen size and follows the bundle's auto-scale setting.
 
 {: .warning }
 Many websites block embedding with `X-Frame-Options` or `Content-Security-Policy` headers. Such a site stays blank on the display. The admin preview warns you only when nothing loads within 4 seconds, so check a new website slide in the preview before taking it live.
@@ -87,6 +88,7 @@ Right-click a slide for more actions:
 - **Edit Title**: change the name shown in the list. For website slides, this edits the URL.
 - **Rename File**: rename the slide's JSON file (editor slides).
 - **Replace Video**: pick a different video (video slides).
+- **Replace Image**: pick a different image (image slides).
 - **Duplicate Slide** / **Delete Slide**
 
 ### Per-slide overrides

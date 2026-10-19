@@ -65,7 +65,7 @@
   "defaultDuration": 20,
   "defaultTransition": {
     "type": "fade",
-    "duration": 600
+    "duration": 1200
   },
   "autoScale": false
 }

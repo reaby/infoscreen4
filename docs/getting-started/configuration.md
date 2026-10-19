@@ -77,7 +77,7 @@ All runtime state is plain files:
 data/
 ├── bundles/<name>/bundle.json   # bundle settings and slide order
 ├── slides/*.json                # editor (Fabric.js) slides, shared by all bundles
-├── images/                      # images used in slides
+├── images/                      # images for image slides and image objects
 ├── videos/                      # videos for video slides and video objects
 ├── backgrounds/                 # bundle background images/videos
 ├── fonts/                       # uploaded fonts + google-fonts.json

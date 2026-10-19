@@ -16,7 +16,7 @@ Uploaded files are stored under `data/`, one folder per library:
 
 | Library | Folder | Used for |
 |:--|:--|:--|
-| Images | `data/images/` | Image objects in editor slides |
+| Images | `data/images/` | Image slides and image objects in editor slides |
 | Videos | `data/videos/` | Video slides and video objects in editor slides |
 | Backgrounds | `data/backgrounds/` | Bundle background images and looping videos |
 | Fonts | `data/fonts/` | Custom fonts for the editor and displays |
