@@ -32,20 +32,25 @@ export function isAllowedOrigin(req: IncomingMessage): boolean {
     return originHost === req.headers.host || originHost === forwardedHost;
 }
 
+export interface SocketIdentity {
+    role: SocketRole;
+    username: string | null; // null for displays, which don't sign in
+}
+
 /**
  * Determines the role a socket is allowed to act as. Displays are read-only
  * receivers and need no sign-in; admin and streamer roles require a session.
  * Returns null when the requested role is not permitted.
  */
-export async function resolveSocketRole(socket: Socket): Promise<SocketRole | null> {
+export async function resolveSocketIdentity(socket: Socket): Promise<SocketIdentity | null> {
     const requested = socket.handshake.query.role;
-    if (requested === "display") return "display";
+    if (requested === "display") return { role: "display", username: null };
     if (requested !== "admin" && requested !== "streamer") return null;
 
     const token = getSessionTokenFromCookieHeader(socket.handshake.headers.cookie);
     const user = await getSessionUser(token);
     if (!user) return null;
 
-    if (requested === "admin") return user.role === "admin" ? "admin" : null;
-    return "streamer"; // both streamers and admins may broadcast
+    if (requested === "admin") return user.role === "admin" ? { role: "admin", username: user.username } : null;
+    return { role: "streamer", username: user.username }; // both streamers and admins may broadcast
 }

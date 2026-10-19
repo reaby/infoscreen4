@@ -7,7 +7,7 @@ import { bundleManager } from "./app/lib/BundleManager";
 import { getDisplayConfigs, ensureDisplayId, setDisplayConfigs, DisplayConfig } from "./app/lib/displayState";
 import { resolveTransition, TransitionConfig } from "./app/lib/transitions";
 import { setContentChangedListener } from "./app/lib/contentEvents";
-import { isAllowedOrigin, resolveSocketRole, SocketRole } from "./app/lib/socketAuth";
+import { isAllowedOrigin, resolveSocketIdentity, SocketRole } from "./app/lib/socketAuth";
 import { CLIENT_ADDRESS_HEADER } from "./app/lib/clientAddress";
 import { getAllUsers } from "./app/lib/auth";
 import { getOrCreateSetupCode } from "./app/lib/setupCode";
@@ -74,6 +74,7 @@ const streams = new Map<string, StreamInfo>();          // streamId → info
 const socketToStream = new Map<string, string>();       // socketId → streamId
 const displayActiveStream = new Map<string, string>();  // displayId → streamId
 const socketToWatchedStream = new Map<string, string>(); // viewerSocketId → streamId
+const streamOwners = new Map<string, string>();         // streamId → username of the streamer
 
 function emitAdminStreams() {
     if (!io) return;
@@ -255,8 +256,24 @@ function startCycle(displayId: string, initial: ActiveSlide) {
     displayCycleTimers[displayId] = setTimeout(tick, initialDelay * 1000);
 }
 
+function emitStreamIncoming(displayId: string, stream: StreamInfo) {
+    io?.to(displayRoom(displayId)).emit("stream:incoming", {
+        streamId: stream.streamId,
+        streamName: stream.name,
+        streamSocketId: stream.socketId,
+    });
+}
+
+/** A stream moved to a new streamer socket; displays showing it reconnect to the new one. */
+function reannounceStreamToDisplays(stream: StreamInfo) {
+    for (const [displayId, streamId] of displayActiveStream.entries()) {
+        if (streamId === stream.streamId) emitStreamIncoming(displayId, stream);
+    }
+}
+
 function cleanupStream(streamId: string, streamerSocketId: string) {
     streams.delete(streamId);
+    streamOwners.delete(streamId);
     socketToStream.delete(streamerSocketId);
     for (const [viewerSocketId, watchedStreamId] of socketToWatchedStream.entries()) {
         if (watchedStreamId === streamId) {
@@ -311,9 +328,10 @@ app.prepare().then(() => {
     });
 
     io.use(async (socket, next) => {
-        const role = await resolveSocketRole(socket);
-        if (!role) return next(new Error("unauthorized"));
-        socket.data.role = role;
+        const identity = await resolveSocketIdentity(socket);
+        if (!identity) return next(new Error("unauthorized"));
+        socket.data.role = identity.role;
+        socket.data.username = identity.username;
         next();
     });
 
@@ -491,10 +509,21 @@ app.prepare().then(() => {
         if (role === "streamer") {
             socket.on("stream:register", (data: { streamId: string; name: string }) => {
                 const existing = streams.get(data.streamId);
-                if (existing && existing.socketId !== socket.id) return; // don't let another socket take over a stream
+                const isTakeover = !!existing && existing.socketId !== socket.id;
+                if (isTakeover) {
+                    // Only the stream's own user may take it over — a streamer that reconnected
+                    // before the server noticed its old connection dropped.
+                    if (streamOwners.get(data.streamId) !== socket.data.username) return;
+                    socketToStream.delete(existing.socketId);
+                }
+                // A socket owns one stream; drop its previous one instead of orphaning it.
+                const previousStreamId = socketToStream.get(socket.id);
+                if (previousStreamId && previousStreamId !== data.streamId) cleanupStream(previousStreamId, socket.id);
                 const info: StreamInfo = { streamId: data.streamId, name: data.name, socketId: socket.id };
                 streams.set(data.streamId, info);
+                streamOwners.set(data.streamId, socket.data.username);
                 socketToStream.set(socket.id, data.streamId);
+                if (isTakeover) reannounceStreamToDisplays(info);
                 emitAdminStreams();
             });
 
@@ -548,11 +577,7 @@ app.prepare().then(() => {
                 if (!stream) return;
                 const targetId = ensureDisplayId(data.displayId);
                 displayActiveStream.set(targetId, data.streamId);
-                io?.to(displayRoom(targetId)).emit("stream:incoming", {
-                    streamId: stream.streamId,
-                    streamName: stream.name,
-                    streamSocketId: stream.socketId,
-                });
+                emitStreamIncoming(targetId, stream);
             });
 
             socket.on("stream:clear", (data: { displayId: string }) => {

@@ -77,7 +77,9 @@ export default function FileManagerDialog({ basePath, onSelect, onClose, probeVi
             const form = new FormData();
             form.append("file", file);
             if (probeVideoDuration) {
-                const duration = await readVideoDuration(URL.createObjectURL(file));
+                const objectUrl = URL.createObjectURL(file);
+                // The object URL keeps the whole file in memory until revoked.
+                const duration = await readVideoDuration(objectUrl).finally(() => URL.revokeObjectURL(objectUrl));
                 if (duration !== null) form.append("duration", String(duration));
             }
             const res = await fetch(basePath, { method: "POST", body: form });

@@ -9,6 +9,7 @@ const PC_CONFIG: RTCConfiguration = {
 };
 
 interface StreamEntry {
+    socketId: string; // the streamer connection this peer connection talks to
     pc: RTCPeerConnection;
     mediaStream: MediaStream | null;
     videoEl: HTMLVideoElement | null;
@@ -50,11 +51,12 @@ export default function StreamsPanel({
         const socket = socketRef.current;
         if (!socket) return;
 
-        const currentIds = new Set(streamsRef.current.map((s) => s.streamId));
+        const currentSocketIds = new Map(streamsRef.current.map((s) => [s.streamId, s.socketId]));
 
-        // Tear down connections for streams that are gone
+        // Tear down connections for streams that are gone, or whose streamer
+        // reconnected — the old peer connection points at a dead socket.
         for (const [streamId, entry] of entriesRef.current.entries()) {
-            if (!currentIds.has(streamId)) {
+            if (currentSocketIds.get(streamId) !== entry.socketId) {
                 entry.pc.close();
                 socket.emit("stream:unwatch", { streamId });
                 entriesRef.current.delete(streamId);
@@ -66,7 +68,7 @@ export default function StreamsPanel({
             if (entriesRef.current.has(stream.streamId)) continue;
 
             const pc = new RTCPeerConnection(PC_CONFIG);
-            const entry: StreamEntry = { pc, mediaStream: null, videoEl: null };
+            const entry: StreamEntry = { socketId: stream.socketId, pc, mediaStream: null, videoEl: null };
             entriesRef.current.set(stream.streamId, entry);
 
             pc.ontrack = (e) => {

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { authorize } from "@/app/lib/authorization";
-import { readFile, unlink, rename, stat } from "fs/promises";
+import { unlink, rename, stat } from "fs/promises";
 import path from "path";
 import { notModifiedResponse, validatorHeaders } from "@/app/lib/fileValidators";
+import { streamFile } from "@/app/lib/fileStream";
 
 const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 const IMAGES_DIR = process.env.INFOSCREEN_DATA_DIR
@@ -38,9 +39,8 @@ export async function GET(
         const info = await stat(filePath);
         const notModified = notModifiedResponse(req, info);
         if (notModified) return notModified;
-        const buf = await readFile(filePath);
         const mime = mimeFor(file);
-        return new NextResponse(buf, {
+        return new NextResponse(streamFile(filePath), {
             headers: {
                 "Content-Type": mime,
                 "Content-Length": String(info.size),

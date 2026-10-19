@@ -13,6 +13,9 @@ import { FabricVideo } from "./FabricVideo";
 
 const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
 
+// Each undo step holds a full copy of the slide JSON.
+const MAX_HISTORY = 100;
+
 export default function FabricEditor({ initialBundle, initialSlide }: { initialBundle?: string; initialSlide?: string }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -284,12 +287,21 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
 
         setCanvas(canvas);
 
+        // Loading a slide fires one event per removed and added object in the same tick;
+        // coalesce them into a single snapshot instead of one full copy per object.
+        let snapshotQueued = false;
         const saveSnapshot = () => {
-            if (isRestoringRef.current) return;
-            const json = JSON.stringify(sanitizeCanvasJson(canvas.toJSON()));
-            historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
-            historyRef.current.push(json);
-            historyIndexRef.current = historyRef.current.length - 1;
+            if (isRestoringRef.current || snapshotQueued) return;
+            snapshotQueued = true;
+            queueMicrotask(() => {
+                snapshotQueued = false;
+                const json = JSON.stringify(sanitizeCanvasJson(canvas.toJSON()));
+                historyRef.current = historyRef.current
+                    .slice(0, historyIndexRef.current + 1)
+                    .concat(json)
+                    .slice(-MAX_HISTORY);
+                historyIndexRef.current = historyRef.current.length - 1;
+            });
         };
 
         // Zoom or pan functionality with mouse wheel
@@ -679,8 +691,10 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         isRestoringRef.current = false;
         // Save the empty canvas as a new undo snapshot
         const json = JSON.stringify(sanitizeCanvasJson(canvas.toJSON()));
-        historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
-        historyRef.current.push(json);
+        historyRef.current = historyRef.current
+            .slice(0, historyIndexRef.current + 1)
+            .concat(json)
+            .slice(-MAX_HISTORY);
         historyIndexRef.current = historyRef.current.length - 1;
         canvas.requestRenderAll();
     };

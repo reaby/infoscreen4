@@ -75,7 +75,18 @@ export default function StreamSendPage() {
     const previewRef = useRef<HTMLVideoElement>(null);
     const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
     const streamIdRef = useRef<string>(generateId());
+    // What the server knows this stream as while it is live; re-sent after every reconnect.
+    const registrationRef = useRef<{ streamId: string; name: string } | null>(null);
     const flippingRef = useRef(false);
+    // Read when a viewer joins, so changing it doesn't recreate the socket.
+    const targetBitrateRef = useRef(targetBitrateKbps);
+    useEffect(() => { targetBitrateRef.current = targetBitrateKbps; }, [targetBitrateKbps]);
+
+    function closePeerConnections() {
+        pcsRef.current.forEach((pc) => pc.close());
+        pcsRef.current.clear();
+        setViewerCount(0);
+    }
 
     // Auth check
     useEffect(() => {
@@ -100,6 +111,15 @@ export default function StreamSendPage() {
         const socket = io({ query: { role: "streamer" }, transports: ["websocket", "polling"] });
         socketRef.current = socket;
 
+        // After a reconnect the server has a new socket id for us: viewers rejoin
+        // with fresh peer connections, so the old ones are useless.
+        socket.on("connect", () => {
+            const registration = registrationRef.current;
+            if (!registration) return;
+            closePeerConnections();
+            socket.emit("stream:register", registration);
+        });
+
         socket.on("stream:viewer:joined", async ({ viewerSocketId }: { viewerSocketId: string }) => {
             if (!streamRef.current) return;
             setViewerCount((n) => n + 1);
@@ -111,7 +131,7 @@ export default function StreamSendPage() {
                 pc.addTrack(track, streamRef.current);
             }
 
-            await applyVideoBitrate(pc, targetBitrateKbps);
+            await applyVideoBitrate(pc, targetBitrateRef.current);
 
             pc.onicecandidate = (e) => {
                 if (e.candidate) {
@@ -128,7 +148,9 @@ export default function StreamSendPage() {
 
         socket.on("stream:viewer:left", ({ viewerSocketId }: { viewerSocketId: string }) => {
             const pc = pcsRef.current.get(viewerSocketId);
-            if (pc) { pc.close(); pcsRef.current.delete(viewerSocketId); }
+            if (!pc) return; // e.g. a display re-watching after a reconnect, already cleared
+            pc.close();
+            pcsRef.current.delete(viewerSocketId);
             setViewerCount((n) => Math.max(0, n - 1));
         });
 
@@ -143,7 +165,7 @@ export default function StreamSendPage() {
         });
 
         return () => { socket.disconnect(); };
-    }, [authChecked, targetBitrateKbps]);
+    }, [authChecked]);
 
     function attachEndedHandler(media: MediaStream) {
         media.getTracks().forEach((t) => {
@@ -173,10 +195,11 @@ export default function StreamSendPage() {
             if (previewRef.current) previewRef.current.srcObject = media;
 
             streamIdRef.current = generateId();
-            socketRef.current?.emit("stream:register", {
+            registrationRef.current = {
                 streamId: streamIdRef.current,
                 name: streamName || username || "Stream",
-            });
+            };
+            socketRef.current?.emit("stream:register", registrationRef.current);
 
             setSourceType(type);
             setFacingMode(facing);
@@ -225,15 +248,14 @@ export default function StreamSendPage() {
 
     function stopStream() {
         socketRef.current?.emit("stream:unregister", { streamId: streamIdRef.current });
+        registrationRef.current = null;
         streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
         if (previewRef.current) previewRef.current.srcObject = null;
-        pcsRef.current.forEach((pc) => pc.close());
-        pcsRef.current.clear();
+        closePeerConnections();
         setStreaming(false);
         setSourceType(null);
         setAudioMuted(false);
-        setViewerCount(0);
     }
 
     if (!authChecked) return null;
