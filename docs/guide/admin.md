@@ -23,7 +23,7 @@ Open `/admin` and sign in. Everything you need while the event runs is on this p
 - **Live view**: a small window in the top-right corner showing what the selected display shows right now, with its [playback controls](#playback-control).
 - **Slide properties**: a collapsible bar at the bottom with the [per-slide overrides](#per-slide-overrides).
 
-Bundle settings, display configuration, live streams and users are in the **Settings** panel, which slides in from the right. Close it with ✕ or Esc.
+Bundle settings, display configuration and users are in the **Settings** panel, and live streams in the **Streams** panel. Both slide in from the right and close with ✕ or Esc.
 
 Changes made by one admin appear immediately for all other admins who have `/admin` open.
 
@@ -169,4 +169,4 @@ The announcement stays on top of the slides until you clear it. While an announc
 
 ## Live streams
 
-The **Streams** tab in the **Settings** panel lists everyone currently broadcasting from [`/send`](streaming). Click **Show on display** to show a stream full-screen on the selected display, and **Clear** to return to the slides.
+The **Streams** button in the header opens a panel listing everyone currently broadcasting from [`/send`](streaming). The button shows a blinking red dot while anyone is broadcasting. Click **Show on display** to show a stream full-screen on the selected display, and **Clear** to return to the slides.

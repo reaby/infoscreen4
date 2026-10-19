@@ -41,7 +41,7 @@ interface BundleInfo {
     slides: string[];
 }
 
-type SettingsTab = "bundle" | "displays" | "streams" | "users";
+type SettingsTab = "bundle" | "displays" | "users";
 
 interface PendingTake {
     bundle: string;
@@ -166,6 +166,7 @@ export default function AdminDashboard() {
     const [previewJson, setPreviewJson] = useState<object | null>(null);
     const [liveJson, setLiveJson] = useState<object | null>(null);
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+    const [streamsOpen, setStreamsOpen] = useState(false);
     const [liveViewVisible, setLiveViewVisible] = useState(true);
     const [liveSwapped, setLiveSwapped] = useState(false);
     const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -873,7 +874,7 @@ export default function AdminDashboard() {
     // Shortcut: L shows or hides the live view. Taking a slide live deliberately has no
     // keyboard shortcut, so a stray key press can't change what is on screen.
     // Skipped while a dialog or the settings drawer is open.
-    const shortcutsBlocked = !!dialog || settingsTab !== null || announcementDialogOpen || pendingTake !== null;
+    const shortcutsBlocked = !!dialog || settingsTab !== null || streamsOpen || announcementDialogOpen || pendingTake !== null;
     useEffect(() => {
         if (shortcutsBlocked) return;
         const onKeyDown = (e: KeyboardEvent) => {
@@ -891,6 +892,7 @@ export default function AdminDashboard() {
     };
 
     const closeSettings = useCallback(() => setSettingsTab(null), []);
+    const closeStreams = useCallback(() => setStreamsOpen(false), []);
 
     if (!authChecked) {
         return null;
@@ -966,9 +968,15 @@ export default function AdminDashboard() {
                 />
             ),
         },
+        { id: "users", label: "Users", content: <UserManager /> },
+    ];
+
+    const hasActiveStreams = (state.streams?.length ?? 0) > 0;
+
+    const streamsTabs: DrawerTab<"streams">[] = [
         {
             id: "streams",
-            label: <><Radio size={11} />{state.streams?.length > 0 && <span className="admin-live-dot" />} Streams</>,
+            label: <><Radio size={11} />{hasActiveStreams && <span className="admin-live-dot" />} Streams</>,
             content: (
                 <div className="admin-display-config-panel">
                     <div className="admin-display-config-header">
@@ -999,7 +1007,6 @@ export default function AdminDashboard() {
                 </div>
             ),
         },
-        { id: "users", label: "Users", content: <UserManager /> },
     ];
 
     return (
@@ -1075,9 +1082,16 @@ export default function AdminDashboard() {
                             <Megaphone size={13} />
                         </button>
                         <button
+                            className={`admin-nav-btn${streamsOpen ? " active" : ""}`}
+                            onClick={() => { setSettingsTab(null); setStreamsOpen(true); }}
+                            title={hasActiveStreams ? "Live streams (broadcasting)" : "Live streams"}
+                        >
+                            <Radio size={13} />{hasActiveStreams && <span className="admin-live-dot" />} Streams
+                        </button>
+                        <button
                             className={`admin-nav-btn${settingsTab ? " active" : ""}`}
-                            onClick={() => setSettingsTab(selectedBundle ? "bundle" : "displays")}
-                            title="Bundle, display, stream and user settings"
+                            onClick={() => { setStreamsOpen(false); setSettingsTab(selectedBundle ? "bundle" : "displays"); }}
+                            title="Bundle, display and user settings"
                         >
                             <Settings size={13} /> Settings
                         </button>
@@ -1519,10 +1533,20 @@ export default function AdminDashboard() {
 
                     {settingsTab && (
                         <SettingsDrawer
+                            label="Settings"
                             tabs={settingsTabs}
                             activeTab={settingsTab}
                             onTabChange={setSettingsTab}
                             onClose={closeSettings}
+                        />
+                    )}
+                    {streamsOpen && (
+                        <SettingsDrawer
+                            label="Streams"
+                            tabs={streamsTabs}
+                            activeTab="streams"
+                            onTabChange={() => {}}
+                            onClose={closeStreams}
                         />
                     )}
                 </main>

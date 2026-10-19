@@ -11,14 +11,16 @@ export interface DrawerTab<T extends string> {
 }
 
 interface Props<T extends string> {
+    /** Accessible name of the panel. */
+    label: string;
     tabs: DrawerTab<T>[];
     activeTab: T;
     onTabChange: (tab: T) => void;
     onClose: () => void;
 }
 
-/** Slide-over panel for configuration that isn't part of running the show. */
-export default function SettingsDrawer<T extends string>({ tabs, activeTab, onTabChange, onClose }: Props<T>) {
+/** Slide-over panel from the right, with one or more tabs. */
+export default function SettingsDrawer<T extends string>({ label, tabs, activeTab, onTabChange, onClose }: Props<T>) {
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") onClose();
@@ -32,7 +34,7 @@ export default function SettingsDrawer<T extends string>({ tabs, activeTab, onTa
     return (
         <>
             <div className="admin-drawer-scrim" onClick={onClose} />
-            <aside className="admin-drawer" aria-label="Settings">
+            <aside className="admin-drawer" aria-label={label}>
                 <div className="admin-drawer-tabs">
                     {tabs.map((tab) => (
                         <button

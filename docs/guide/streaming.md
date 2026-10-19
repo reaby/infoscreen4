@@ -27,11 +27,11 @@ Stream a camera or a screen from any browser to any display. Video travels peer-
 
 ![The stream sender page]({{ '/assets/images/screenshots/send.png' | relative_url }})
 
-The stream now appears in the admin under **Settings → Streams**.
+The stream now appears in the admin's **Streams** panel.
 
 ## Show a stream on a display
 
-In `/admin`, select the display, open **Settings → Streams** and click **Show on display**. The stream covers the slides until you click **Clear** or the sender stops.
+In `/admin`, select the display, open **Streams** in the header and click **Show on display**. The stream covers the slides until you click **Clear** or the sender stops.
 
 ![Live streams in the admin]({{ '/assets/images/screenshots/streams.png' | relative_url }})
 
