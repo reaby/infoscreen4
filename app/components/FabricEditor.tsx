@@ -7,7 +7,7 @@ import * as fabric from "fabric";
 import Toolbar from "./Toolbar";
 import ContextMenu from "./ContextMenu";
 import ShortcutHelpPopup from "./ShortcutHelpPopup";
-import { loadFabricJsonSafely, sanitizeCanvasJson } from "./fabricLoadHelpers";
+import { disposeObjectsOnRemove, loadFabricJsonSafely, sanitizeCanvasJson } from "./fabricLoadHelpers";
 import { refreshTextMetrics } from "./fabricFonts";
 import { FabricVideo } from "./FabricVideo";
 
@@ -576,12 +576,18 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
         canvas.on("object:added", saveSnapshot);
         canvas.on("object:removed", saveSnapshot);
         canvas.on("object:modified", saveSnapshot);
+        // Undo/redo restore from JSON snapshots, so removed objects are never re-added.
+        const stopDisposingRemoved = disposeObjectsOnRemove(canvas);
 
+        // Drive video frame updates until the editor unmounts.
+        let rendering = true;
         fabric.util.requestAnimFrame(function render() {
+            if (!rendering) return;
             canvas.requestRenderAll();
             fabric.util.requestAnimFrame(render);
         });
         return () => {
+            rendering = false;
             console.log("Cleaning up canvas");
             document.removeEventListener("keydown", handleKeyDown);
             document.removeEventListener("keyup", handleKeyUp);
@@ -596,6 +602,7 @@ export default function FabricEditor({ initialBundle, initialSlide }: { initialB
             canvas.off("object:added", saveSnapshot);
             canvas.off("object:removed", saveSnapshot);
             canvas.off("object:modified", saveSnapshot);
+            stopDisposingRemoved();
             canvas.dispose();
         };
     }, [fitToBundle, resizeCanvasToContainer, syncBackgroundLayer, updateScrollbars, zoomCanvasToCenter]);

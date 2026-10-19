@@ -5,7 +5,7 @@ import Image from "next/image";
 import * as fabric from "fabric";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
 import "./FabricVideo"; // side-effect: registers FabricVideo in classRegistry
-import { loadFabricJsonSafely } from "./fabricLoadHelpers";
+import { disposeObjectsOnRemove, loadFabricJsonSafely } from "./fabricLoadHelpers";
 import { preloadFabricFonts, refreshTextMetrics } from "./fabricFonts";
 import { useFontRegistry } from "../hooks/useFontRegistry";
 import { loadFontsIntoDocument } from "../lib/loadCustomFonts";
@@ -58,6 +58,8 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
             interactive: false,
         });
         fabricRef.current = c;
+
+        disposeObjectsOnRemove(c);
 
         // Drive video frame updates
         let running = true;

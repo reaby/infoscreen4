@@ -83,6 +83,18 @@ export function sanitizeCanvasJson(value: any): any {
     return value;
 }
 
+/**
+ * Disposes every object once it is removed from the canvas. Fabric's loadFromJSON
+ * and clear() only remove objects, which would leave e.g. video elements playing in
+ * the background. Only use this where removed objects are never added back.
+ * Returns a function that stops the disposing.
+ */
+export function disposeObjectsOnRemove(canvas: fabric.Canvas | fabric.StaticCanvas): () => void {
+    const disposeRemoved = ({ target }: { target: fabric.FabricObject }) => target.dispose();
+    canvas.on("object:removed", disposeRemoved);
+    return () => canvas.off("object:removed", disposeRemoved);
+}
+
 export async function loadFabricJsonSafely(canvas: fabric.Canvas | fabric.StaticCanvas, json: FabricJsonInput) {
     const stats = { missingAssets: false };
     try {

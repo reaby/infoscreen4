@@ -10,6 +10,13 @@ type FabricVideoOptions = fabric.TOptions<fabric.ImageProps> & {
     muted?: boolean;
 };
 
+function releaseVideoElement(videoEl: HTMLVideoElement): void {
+    videoEl.pause();
+    videoEl.removeAttribute("src");
+    videoEl.replaceChildren(); // drop <source> children
+    videoEl.load(); // makes the browser release the decoder and buffered media
+}
+
 export class FabricVideo extends fabric.FabricImage {
     static type = "FabricVideo";
 
@@ -39,6 +46,14 @@ export class FabricVideo extends fabric.FabricImage {
             loop: this.loop,
             muted: this.muted,
         };
+    }
+
+    // Fabric only drops its reference to the element. A detached <video> that is still
+    // playing is never garbage-collected and keeps decoding, so stop it and free its source.
+    dispose(): void {
+        const videoEl = this.getElement();
+        super.dispose();
+        if (videoEl instanceof HTMLVideoElement) releaseVideoElement(videoEl);
     }
 
     // Called by Fabric's enlivenObjects during loadFromJSON

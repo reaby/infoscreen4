@@ -86,9 +86,13 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
                 if (active.json) setDisplayJson(active.json as object);
                 return;
             }
-            // Website/video slides have no fabric JSON on disk — fetching it always 400s.
+            // Website/video/image slides have no fabric JSON on disk — fetching it always 400s.
+            // Clear the previous slide's JSON so the hidden canvas doesn't keep running it.
             const entryType = resolvedMeta.slides?.find((s) => s.id === active.slide)?.type;
-            if (entryType && entryType !== "fabric") return;
+            if (entryType && entryType !== "fabric") {
+                setDisplayJson(null);
+                return;
+            }
 
             fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
                 .then((r) => r.json()).catch(() => null)
