@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 
 type ApiResult = {
@@ -11,37 +11,47 @@ type ApiResult = {
     message?: string;
 };
 
+type DisplayOption = { id: string; name: string };
+
 const emptyForm = { username: "", password: "", setupCode: "" };
+const FALLBACK_DISPLAYS: DisplayOption[] = [{ id: "1", name: "Display 1" }];
+
+/** Resolves to the configured displays, the fallback on failure, or null when there are none to show. */
+async function fetchDisplayOptions(): Promise<DisplayOption[] | null> {
+    try {
+        const response = await fetch("/api/displays");
+        if (!response.ok) throw new Error("Failed to load display configs");
+        const data = await response.json();
+        return Array.isArray(data) && data.length > 0 ? data : null;
+    } catch {
+        return FALLBACK_DISPLAYS;
+    }
+}
+
+const subscribeNever = () => () => {};
+
+/** False during server rendering and hydration, true once running in the browser. */
+function useIsClient(): boolean {
+    return useSyncExternalStore(subscribeNever, () => true, () => false);
+}
 
 export default function Home() {
     const [form, setForm] = useState(emptyForm);
     const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
-    const [displayOptions, setDisplayOptions] = useState<{ id: string; name: string }[]>([]);
+    const [displayOptions, setDisplayOptions] = useState<DisplayOption[]>([]);
     const [selectedDisplay, setSelectedDisplay] = useState("");
     const [isRegister, setIsRegister] = useState(false);
     const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [working, setWorking] = useState(false);
-    const [mounted, setMounted] = useState(false);
+    const mounted = useIsClient();
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    const refreshDisplayOptions = useCallback(async () => {
-        try {
-            const response = await fetch("/api/displays");
-            if (!response.ok) throw new Error("Failed to load display configs");
-            const data = await response.json();
-            if (Array.isArray(data) && data.length > 0) {
-                setDisplayOptions(data);
-                setSelectedDisplay((current) => current || data[0].id);
-                return;
-            }
-        } catch {
-            setDisplayOptions([{ id: "1", name: "Display 1" }]);
-            setSelectedDisplay((current) => current || "1");
-        }
+    const refreshDisplayOptions = useCallback(() => {
+        void fetchDisplayOptions().then((options) => {
+            if (!options) return;
+            setDisplayOptions(options);
+            setSelectedDisplay((current) => current || options[0].id);
+        });
     }, []);
 
     useEffect(() => {

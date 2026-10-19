@@ -15,6 +15,19 @@ function familyFromFilename(filename: string): string {
     return filename.replace(/\.(woff2?|ttf|otf)$/i, "");
 }
 
+interface FontLists {
+    uploaded: string[]; // font filenames
+    google: string[];   // Google Fonts family names
+}
+
+async function fetchFontLists(): Promise<FontLists> {
+    const [uploaded, google]: [string[], string[]] = await Promise.all([
+        fetch(FONTS_BASE).then((r) => r.json()),
+        fetch(GOOGLE_FONTS_BASE).then((r) => r.json()),
+    ]);
+    return { uploaded, google };
+}
+
 export default function FontManagerDialog({ onClose, onChange }: Props) {
     const [uploaded, setUploaded] = useState<string[]>([]);
     const [google, setGoogle] = useState<string[]>([]);
@@ -24,21 +37,24 @@ export default function FontManagerDialog({ onClose, onChange }: Props) {
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const load = useCallback(async () => {
-        setError(null);
-        try {
-            const [files, families]: [string[], string[]] = await Promise.all([
-                fetch(FONTS_BASE).then((r) => r.json()),
-                fetch(GOOGLE_FONTS_BASE).then((r) => r.json()),
-            ]);
-            setUploaded(files);
-            setGoogle(families);
-        } catch {
-            setError("Failed to load fonts");
-        }
+    const applyFontLists = useCallback(({ uploaded, google }: FontLists) => {
+        setUploaded(uploaded);
+        setGoogle(google);
     }, []);
 
-    useEffect(() => { void load(); }, [load]);
+    const load = useCallback(
+        () => fetchFontLists().then(applyFontLists, () => setError("Failed to load fonts")),
+        [applyFontLists]
+    );
+
+    useEffect(() => {
+        let current = true;
+        fetchFontLists().then(
+            (lists) => { if (current) applyFontLists(lists); },
+            () => { if (current) setError("Failed to load fonts"); }
+        );
+        return () => { current = false; };
+    }, [applyFontLists]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

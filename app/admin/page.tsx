@@ -627,14 +627,14 @@ export default function AdminDashboard() {
         setGlobalSlidePickerOpen(false);
         if (!selectedBundle) return;
 
-        const existingIds = new Set((bundleMeta?.slides || []).map((entry) => entry.id));
-        if (existingIds.has(slide)) {
+        const currentSlides = bundleMeta.slides ?? [];
+        if (currentSlides.some((entry) => entry.id === slide)) {
             setSelectedSlide(slide);
             return;
         }
 
         const nextSlides = [
-            ...(bundleMeta?.slides || []),
+            ...currentSlides,
             {
                 id: slide,
                 type: "fabric" as const,
@@ -646,7 +646,7 @@ export default function AdminDashboard() {
 
         saveMeta({ slides: nextSlides });
         setSelectedSlide(slide);
-    }, [bundleMeta?.slides, selectedBundle, saveMeta]);
+    }, [bundleMeta.slides, selectedBundle, saveMeta]);
 
     const handleDeleteSlide = async (bundle: string, name: string) => {
         if (!await askConfirm(`Are you sure you want to delete slide '${name}'?`)) return;

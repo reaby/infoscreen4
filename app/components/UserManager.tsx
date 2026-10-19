@@ -6,27 +6,31 @@ type UserRole = "admin" | "streamer";
 type User = { username: string; role: UserRole };
 type StatusMessage = { type: "success" | "error"; text: string } | null;
 
+async function fetchUsers(): Promise<User[]> {
+    const data = await fetch("/api/users").then((r) => r.json()).catch(() => []);
+    return Array.isArray(data) ? data : [];
+}
+
 export default function UserManager() {
     const [users, setUsers] = useState<User[]>([]);
     const [newUserName, setNewUserName] = useState("");
     const [newUserPassword, setNewUserPassword] = useState("");
     const [newUserRole, setNewUserRole] = useState<UserRole>("admin");
     const [status, setStatus] = useState<StatusMessage>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true); // starts true: the user list is loading
 
-    const loadUsers = useCallback(async () => {
-        setLoading(true);
-        try {
-            const data = await fetch("/api/users").then((r) => r.json()).catch(() => []);
-            setUsers(Array.isArray(data) ? data : []);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    // Callers that change users already show the loading state themselves.
+    const loadUsers = useCallback(() => fetchUsers().then(setUsers), []);
 
     useEffect(() => {
-        void loadUsers();
-    }, [loadUsers]);
+        let current = true;
+        void fetchUsers().then((list) => {
+            if (!current) return;
+            setUsers(list);
+            setLoading(false);
+        });
+        return () => { current = false; };
+    }, []);
 
     const handleCreateUser = useCallback(async () => {
         setStatus(null);

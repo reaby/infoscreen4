@@ -11,8 +11,21 @@ const PC_CONFIG: RTCConfiguration = {
 interface StreamEntry {
     socketId: string; // the streamer connection this peer connection talks to
     pc: RTCPeerConnection;
-    mediaStream: MediaStream | null;
-    videoEl: HTMLVideoElement | null;
+}
+
+interface ReceivedMedia {
+    socketId: string; // the streamer connection it came from; stale once the streamer reconnects
+    stream: MediaStream;
+}
+
+function StreamPreview({ mediaStream }: { mediaStream: MediaStream | null }) {
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        if (videoRef.current) videoRef.current.srcObject = mediaStream;
+    }, [mediaStream]);
+
+    return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" />;
 }
 
 interface Props {
@@ -36,7 +49,7 @@ export default function StreamsPanel({
 }: Props) {
     const entriesRef = useRef<Map<string, StreamEntry>>(new Map());
     const streamsRef = useRef(streams);
-    const [, forceUpdate] = useState(0);
+    const [receivedMedia, setReceivedMedia] = useState<Record<string, ReceivedMedia>>({});
 
     useEffect(() => { streamsRef.current = streams; }, [streams]);
 
@@ -68,14 +81,16 @@ export default function StreamsPanel({
             if (entriesRef.current.has(stream.streamId)) continue;
 
             const pc = new RTCPeerConnection(PC_CONFIG);
-            const entry: StreamEntry = { socketId: stream.socketId, pc, mediaStream: null, videoEl: null };
-            entriesRef.current.set(stream.streamId, entry);
+            entriesRef.current.set(stream.streamId, { socketId: stream.socketId, pc });
 
             pc.ontrack = (e) => {
                 const ms = e.streams[0] ?? new MediaStream([e.track]);
-                entry.mediaStream = ms;
-                if (entry.videoEl) entry.videoEl.srcObject = ms;
-                forceUpdate((n) => n + 1);
+                setReceivedMedia((prev) => {
+                    // Drop media of connections that were torn down since.
+                    const live = Object.fromEntries(Object.entries(prev).filter(([streamId, media]) =>
+                        entriesRef.current.get(streamId)?.socketId === media.socketId));
+                    return { ...live, [stream.streamId]: { socketId: stream.socketId, stream: ms } };
+                });
             };
 
             pc.onicecandidate = (e) => {
@@ -108,7 +123,6 @@ export default function StreamsPanel({
         };
 
         socket.on("stream:signal", onSignal);
-        forceUpdate((n) => n + 1);
 
         return () => { socket.off("stream:signal", onSignal); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,25 +162,15 @@ export default function StreamsPanel({
     return (
         <div className="flex flex-col gap-2">
             {streams.map((stream) => {
-                const entry = entriesRef.current.get(stream.streamId);
+                const received = receivedMedia[stream.streamId];
+                const mediaStream = received?.socketId === stream.socketId ? received.stream : null;
                 const isActive = activeStreamIdForTarget === stream.streamId;
 
                 return (
                     <div key={stream.streamId} className="border border-gray-700 rounded-lg overflow-hidden bg-gray-900">
                         <div className="relative bg-black" style={{ height: 250 }}>
-                            <video
-                                ref={(el) => {
-                                    if (entry) {
-                                        entry.videoEl = el;
-                                        if (el && entry.mediaStream) el.srcObject = entry.mediaStream;
-                                    }
-                                }}
-                                autoPlay
-                                playsInline
-                                muted
-                                className="w-full h-full object-contain"
-                            />
-                            {!entry?.mediaStream && (
+                            <StreamPreview mediaStream={mediaStream} />
+                            {!mediaStream && (
                                 <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-sm">
                                     Connecting…
                                 </div>

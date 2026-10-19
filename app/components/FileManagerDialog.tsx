@@ -50,23 +50,30 @@ function readVideoDuration(url: string): Promise<number | null> {
     });
 }
 
+async function fetchFileList(basePath: string): Promise<FileEntry[]> {
+    const data: Array<string | { name: string; duration?: number | null }> = await fetch(basePath).then((r) => r.json());
+    return data.map((item) => typeof item === "string" ? { name: item } : { name: item.name, duration: item.duration ?? undefined });
+}
+
 export default function FileManagerDialog({ basePath, onSelect, onClose, probeVideoDuration }: FileManagerProps) {
     const [files, setFiles] = useState<FileEntry[]>([]);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const load = useCallback(async () => {
-        setError(null);
-        try {
-            const data: Array<string | { name: string; duration?: number | null }> = await fetch(basePath).then((r) => r.json());
-            setFiles(data.map((item) => typeof item === "string" ? { name: item } : { name: item.name, duration: item.duration ?? undefined }));
-        } catch {
-            setError("Failed to load files");
-        }
-    }, [basePath]);
+    const load = useCallback(
+        () => fetchFileList(basePath).then(setFiles, () => setError("Failed to load files")),
+        [basePath]
+    );
 
-    useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        let current = true;
+        fetchFileList(basePath).then(
+            (list) => { if (current) setFiles(list); },
+            () => { if (current) setError("Failed to load files"); }
+        );
+        return () => { current = false; };
+    }, [basePath]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
