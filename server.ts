@@ -11,14 +11,14 @@ import { isAllowedOrigin, resolveSocketIdentity, SocketRole } from "./app/lib/so
 import { CLIENT_ADDRESS_HEADER } from "./app/lib/clientAddress";
 import { getAllUsers } from "./app/lib/auth";
 import { getOrCreateSetupCode } from "./app/lib/setupCode";
+import { resolveServerTlsFiles } from "./app/lib/tlsFiles";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const hostname = process.env.HOST ?? "0.0.0.0";
 
-const sslKey = process.env.SSL_KEY ?? "key.pem";
-const sslCert = process.env.SSL_CERT ?? "cert.pem";
-const useHttps = existsSync(sslKey) && existsSync(sslCert);
+const tls = resolveServerTlsFiles();
+const useHttps = existsSync(tls.key) && existsSync(tls.cert);
 
 // Shared server state
 interface ActiveSlide {
@@ -318,7 +318,7 @@ app.prepare().then(() => {
 
     const httpServer = useHttps
         ? createHttpsServer(
-              { key: readFileSync(sslKey), cert: readFileSync(sslCert) },
+              { key: readFileSync(tls.key), cert: readFileSync(tls.cert) },
               handleWithClientAddress
           )
         : createHttpServer(handleWithClientAddress);
@@ -603,7 +603,7 @@ app.prepare().then(() => {
         console.log(`> Ready on ${proto}://${hostname}:${port} [${dev ? "dev" : "production"}]`);
         if (!useHttps) {
             console.log(`> Running HTTP only — WebRTC screen/camera capture requires HTTPS on non-localhost origins.`);
-            console.log(`> To enable HTTPS, generate key.pem + cert.pem in the project root (see README).`);
+            console.log(`> To enable HTTPS, run "pnpm run gen-cert" (creates ${tls.cert} + ${tls.key}) and restart.`);
         }
 
         getAllUsers().then((users) => {

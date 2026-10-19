@@ -55,7 +55,7 @@ firefox --kiosk http://<server-ip>:3000/display/display-1
 ```
 
 {: .tip }
-If the server uses a self-signed certificate, open the display URL once by hand and accept the certificate before switching to kiosk mode.
+If the server uses HTTPS with a certificate from `pnpm run gen-cert`, [install `data/ca.pem` as trusted](../getting-started/configuration#trust-the-certificate-on-every-machine) on the display machine first. Accepting the browser's certificate warning instead works, but then the display downloads every video and image again on each slide change.
 
 ## Reconnects
 

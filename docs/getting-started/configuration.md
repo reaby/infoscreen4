@@ -19,8 +19,9 @@ Set these in `.env` (loaded by `pnpm run dev` / `pnpm run start`) or through you
 | `NODE_ENV` | — | Set to `production` for production builds. Any other value runs in development mode. |
 | `HOST` | `0.0.0.0` | Address to bind to. `0.0.0.0` listens on all interfaces. |
 | `PORT` | `3000` | Port for HTTP/HTTPS and WebSockets. |
-| `SSL_KEY` | `key.pem` | Path to the TLS private key. |
-| `SSL_CERT` | `cert.pem` | Path to the TLS certificate. |
+| `SSL_KEY` | `<data>/key.pem` | Path to the TLS private key. |
+| `SSL_CERT` | `<data>/cert.pem` | Path to the TLS certificate. |
+| `CERT_HOSTS` | — | Comma-separated extra hostnames or IP addresses for `pnpm run gen-cert` to put in the certificate, e.g. `infoscreen.lan,192.168.1.10`. |
 | `INFOSCREEN_ROOT` | current directory | Project root override. `data/` is resolved relative to this. |
 | `INFOSCREEN_DATA_DIR` | `<root>/data` | Absolute data directory. Takes precedence over `INFOSCREEN_ROOT`. |
 | `ALLOWED_ORIGINS` | — | Comma-separated extra origins allowed to open socket connections, e.g. `https://screens.example.com`. Only needed when the browser's address differs from the host the server sees. |
@@ -32,19 +33,40 @@ Set these in `.env` (loaded by `pnpm run dev` / `pnpm run start`) or through you
 
 The server switches to HTTPS automatically when both the key and the certificate files exist.
 
-To generate a self-signed certificate for local use (requires `openssl`):
+To generate a certificate for your LAN (requires `openssl`):
 
 ```bash
 pnpm run gen-cert
 ```
 
-This creates `key.pem` and `cert.pem` in the project root, valid for 365 days.
+This creates, in the data directory (`data/` unless `INFOSCREEN_DATA_DIR` is set):
+
+| File | What it is |
+|:--|:--|
+| `ca.pem` | A local certificate authority (CA), valid for 10 years. Created only on the first run. |
+| `ca-key.pem` | The CA's private key. Keep it private: anyone holding it can create certificates your displays trust. |
+| `cert.pem`, `key.pem` | The server certificate, signed by the CA. Valid for `localhost`, the machine's hostname and its current LAN IP addresses. |
+
+Add more names or addresses as arguments, for example `pnpm run gen-cert -- infoscreen.lan 10.0.0.5`, or set `CERT_HOSTS="infoscreen.lan,10.0.0.5"`. Re-run the command when the server's hostname or IP address changes, then restart the server. Machines that already trust `ca.pem` accept the new certificate without further steps.
+
+{: .note }
+Back up the data directory including these files. If `ca.pem` is lost, every display has to trust a new one.
+
+### Trust the certificate on every machine
+
+Copy `data/ca.pem` to each display and admin machine, and install it there once as a trusted root certificate:
+
+- **Windows (Edge, Chrome):** `certutil -addstore -user Root ca.pem`, or double-click `ca.pem` → *Install Certificate* → *Trusted Root Certification Authorities*.
+- **macOS:** open `ca.pem` in Keychain Access, then set it to *Always Trust*.
+- **Linux (Chrome):** `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n Infoscreen4 -i ca.pem` (from `libnss3-tools`).
+- **Firefox (any OS):** *Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import*.
+
+{: .important }
+Clicking through the browser's certificate warning is not enough. Browsers never cache files from a site with an untrusted certificate, so displays download every video, image and font again on each slide change.
 
 ### When do you need HTTPS?
 
 Browsers only allow camera and screen capture on a **secure context**: `https://` or `http://localhost`. If you use [live streaming](../guide/streaming) from another machine on the LAN, run the server over HTTPS.
-
-With a self-signed certificate, every browser (including display clients) must accept the certificate warning once.
 
 ### Behind a reverse proxy
 

@@ -3,9 +3,6 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-# Install build tools
-RUN apk add --no-cache openssl
-
 # Install dependencies using npm
 COPY package.json ./
 RUN npm install
@@ -13,11 +10,14 @@ RUN npm install
 # Build the Next.js app
 COPY . ./
 RUN npm run build
-RUN npm run gen-cert
 
 # Final runtime image
 FROM node:24-alpine AS runner
 WORKDIR /app
+
+# The TLS certificate is created on first start in the mounted data directory
+# (see the start-docker script), so it survives image rebuilds.
+RUN apk add --no-cache openssl
 
 COPY --from=builder /app .
 

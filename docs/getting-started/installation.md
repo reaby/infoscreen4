@@ -52,8 +52,9 @@ The repository includes a `Dockerfile` and a `docker-compose.yml`:
 docker compose up -d --build
 ```
 
-- The image builds the app and creates a self-signed certificate, so the container serves **HTTPS** on port 3000.
 - `./data` is mounted into the container, so your slides, media and users persist across rebuilds.
+- On first start the container creates a certificate authority and a TLS certificate in `./data` and serves **HTTPS** on port 3000. They persist across rebuilds, so displays only need to [trust `data/ca.pem`](configuration#trust-the-certificate-on-every-machine) once.
+- The container can't see the host's LAN address. Set `CERT_HOSTS` in `docker-compose.yml` to the names and IPs displays use to reach the server, **before the first start**. To change them later, run `docker compose exec app npm run gen-cert` and restart the container.
 
 ## Option 3: PM2
 

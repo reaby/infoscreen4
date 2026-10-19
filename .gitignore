@@ -1,8 +1,10 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# TLS certificates
-key.pem
-cert.pem
+# TLS certificates (pnpm run gen-cert)
+data/key.pem
+data/cert.pem
+data/ca.pem
+data/ca-key.pem
 
 # dependencies
 /node_modules

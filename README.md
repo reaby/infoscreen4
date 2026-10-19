@@ -51,13 +51,15 @@ PORT=3000
 pnpm run start
 ```
 
-### Optional: Generate Local Self-Signed Cert
+### Optional: Generate a LAN Certificate
 
 ```bash
 pnpm run gen-cert
 ```
 
-If `key.pem` and `cert.pem` exist (or `SSL_KEY` / `SSL_CERT` are set), the custom server automatically starts in HTTPS mode.
+This creates a local certificate authority (`data/ca.pem`, first run only) and a server certificate (`data/key.pem` / `data/cert.pem`) for this machine's hostname and LAN addresses. Install `data/ca.pem` as a trusted root on every display and admin machine (Windows: `certutil -addstore -user Root ca.pem`). Browsers don't cache videos or images from a site whose certificate they don't trust.
+
+If `data/key.pem` and `data/cert.pem` exist (or `SSL_KEY` / `SSL_CERT` are set), the custom server automatically starts in HTTPS mode.
 
 ### Optional: PM2 Example
 

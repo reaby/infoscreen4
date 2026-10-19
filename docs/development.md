@@ -41,7 +41,7 @@ Camera and screen capture only work on `localhost` or over HTTPS. Run `pnpm run 
 | `pnpm run start` | Production server (reads `.env`) |
 | `pnpm run start-docker` | Production server without `.env` (Docker) |
 | `pnpm run lint` | ESLint |
-| `pnpm run gen-cert` | Create a self-signed `key.pem` / `cert.pem` |
+| `pnpm run gen-cert` | Create a local CA (`data/ca.pem`, first run only) and a server `data/key.pem` / `data/cert.pem` signed by it |
 
 ## Project layout
 

@@ -7,9 +7,9 @@
     "build": "next build",
     "build:webpack": "next build --webpack",
     "start": "cross-env NODE_ENV=production tsx --env-file=.env server.ts",
-    "start-docker": "cross-env NODE_ENV=production tsx server.ts",
+    "start-docker": "tsx scripts/gen-cert.ts --if-missing && cross-env NODE_ENV=production tsx server.ts",
     "lint": "eslint",
-    "gen-cert": "openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj \"/CN=infoscreen\""
+    "gen-cert": "tsx scripts/gen-cert.ts"
   },
   "dependencies": {
     "cross-env": "^10.1.0",
