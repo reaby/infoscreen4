@@ -1,6 +1,7 @@
 "use client";
 
 import * as fabric from "fabric";
+import { releaseVideoElement } from "../lib/mediaRelease";
 
 type FabricVideoOptions = fabric.TOptions<fabric.ImageProps> & {
     videoSrc?: string;
@@ -9,13 +10,6 @@ type FabricVideoOptions = fabric.TOptions<fabric.ImageProps> & {
     loop?: boolean;
     muted?: boolean;
 };
-
-function releaseVideoElement(videoEl: HTMLVideoElement): void {
-    videoEl.pause();
-    videoEl.removeAttribute("src");
-    videoEl.replaceChildren(); // drop <source> children
-    videoEl.load(); // makes the browser release the decoder and buffered media
-}
 
 export class FabricVideo extends fabric.FabricImage {
     static type = "FabricVideo";

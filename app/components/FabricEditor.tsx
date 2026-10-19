@@ -10,6 +10,7 @@ import ShortcutHelpPopup from "./ShortcutHelpPopup";
 import { disposeObjectsOnRemove, loadFabricJsonSafely, sanitizeCanvasJson } from "./fabricLoadHelpers";
 import { refreshTextMetrics } from "./fabricFonts";
 import { FabricVideo } from "./FabricVideo";
+import "./fabricEnv"; // side-effect: frees the memory of elements Fabric disposes
 
 const isVideoFile = (name: string) => /\.(mp4|webm|ogg)$/i.test(name);
 

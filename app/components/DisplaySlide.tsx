@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import * as fabric from "fabric";
 import { BundleMeta, BundleSlideEntry } from "../interfaces/BundleMeta";
-import "./FabricVideo"; // side-effect: registers FabricVideo in classRegistry
+import "./fabricEnv"; // side-effect: frees the memory of elements Fabric disposes
+import { FabricVideo } from "./FabricVideo"; // also registers FabricVideo in classRegistry
+import ManagedVideo from "./ManagedVideo";
 import { disposeObjectsOnRemove, loadFabricJsonSafely } from "./fabricLoadHelpers";
 import { preloadFabricFonts, refreshTextMetrics } from "./fabricFonts";
 import { useFontRegistry } from "../hooks/useFontRegistry";
@@ -61,12 +63,13 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
 
         disposeObjectsOnRemove(c);
 
-        // Drive video frame updates
+        // Drive video frame updates. Static slides are redrawn only when something
+        // changes, so they don't keep the GPU busy with identical frames.
         let running = true;
         const render = () => {
             if (!running || fabricRef.current !== c) return;
             try {
-                c.requestRenderAll();
+                if (c.getObjects().some((obj) => obj instanceof FabricVideo)) c.requestRenderAll();
             } catch {
                 // Keep the loop alive; some browsers can throw transiently during media decode.
             }
@@ -250,7 +253,7 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
             })()}
             <div ref={canvasWrapRef} className="ds-canvas-wrap" style={{ position: "relative" }}>
                 {fileUrl && fileIsVideo && (
-                    <video
+                    <ManagedVideo
                         key={fileUrl}
                         src={fileUrl}
                         autoPlay
@@ -307,7 +310,7 @@ export default function DisplaySlide({ json, bundleMeta, autoScale: autoScaleOve
                     </div>
                 )}
                 {activeEntry?.type === "video" && (
-                    <video
+                    <ManagedVideo
                         key={activeEntry.data}
                         src={`/api/files/videos/${encodeURIComponent(activeEntry.data)}`}
                         autoPlay
