@@ -25,7 +25,7 @@ The project is built with Next.js, React, Socket.IO, and Fabric.js, with a light
 
 ### Prerequisites
 
-- Node.js 20+ recommended.
+- Node.js 24 or newer (required).
 - pnpm 9+ recommended.
 
 ### Install and Build
@@ -80,7 +80,7 @@ Please keep changes aligned with the existing coding style and include relevant 
 
 ### Prerequisites
 
-- Node.js 20+ recommended.
+- Node.js 24 or newer (required).
 - pnpm 9+ recommended.
 
 ### Install Dependencies

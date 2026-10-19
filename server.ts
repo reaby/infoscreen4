@@ -1,3 +1,4 @@
+import "./app/lib/nodeVersionCheck"; // must stay first: exits on a too-old Node.js before anything else loads
 import { createServer as createHttpServer, IncomingMessage, ServerResponse } from "http";
 import { createServer as createHttpsServer } from "https";
 import { readFileSync, existsSync } from "fs";

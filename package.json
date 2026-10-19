@@ -2,6 +2,9 @@
   "name": "infoscreen4",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "tsx watch --env-file=.env server.ts",
     "build": "next build",

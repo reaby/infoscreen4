@@ -12,7 +12,7 @@ nav_order: 1
 
 ## Requirements
 
-- Node.js 20 or newer (the Docker image uses Node.js 24)
+- Node.js 24 or newer. Installing on an older version fails with an "unsupported engine" error.
 - pnpm 9 or newer (npm also works)
 - A browser on each screen. Any modern Chromium, Firefox or Safari will do.
 
