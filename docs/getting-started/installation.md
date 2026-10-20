@@ -55,6 +55,7 @@ docker compose up -d --build
 - `./data` is mounted into the container, so your slides, media and users persist across rebuilds.
 - On first start the container creates a certificate authority and a TLS certificate in `./data` and serves **HTTPS** on port 3000. They persist across rebuilds, so displays only need to [trust `data/ca.pem`](configuration#trust-the-certificate-on-every-machine) once.
 - The container can't see the host's LAN address. Set `CERT_HOSTS` in `docker-compose.yml` to the names and IPs displays use to reach the server, **before the first start**. To change them later, run `docker compose exec app npm run gen-cert` and restart the container.
+- Behind a reverse proxy that terminates TLS, set `DISABLE_HTTPS: 'true'` in `docker-compose.yml`. The container then serves plain HTTP and creates no certificate. See [Behind a reverse proxy](configuration#behind-a-reverse-proxy).
 
 ## Option 3: PM2
 

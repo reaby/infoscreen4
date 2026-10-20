@@ -51,10 +51,10 @@ Creating the first admin account requires this code, so a stranger can't claim a
 ## Deploying on the internet
 
 - **Use HTTPS.** Without it, passwords and session cookies travel unencrypted. Use a reverse proxy with a real certificate (Caddy, nginx + Let's Encrypt), or set `SSL_KEY` / `SSL_CERT`.
-- **Forward headers from the proxy.** The proxy must pass the original `Host` (or `X-Forwarded-Host`) and `X-Forwarded-Proto` headers, and forward WebSocket upgrades. See [Behind a reverse proxy](../getting-started/configuration#behind-a-reverse-proxy).
+- **Forward headers from the proxy.** The proxy must pass the original `Host` (or `X-Forwarded-Host`), `X-Forwarded-Proto` and `X-Forwarded-For` headers, and forward WebSocket upgrades. See [Behind a reverse proxy](../getting-started/configuration#behind-a-reverse-proxy).
 - **Allowed origins.** Socket connections are only accepted from the server's own host. If admins reach the server through a different hostname than the one the server sees, list it in `ALLOWED_ORIGINS`.
 - **Content is public.** Anyone who knows a bundle or file name can load it, because display pages need no sign-in. Don't put confidential material in slides.
-- **Rate limiting behind a proxy.** Behind a reverse proxy, every client shares the proxy's address. The sign-in lock then applies per username across all clients.
+- **Rate limiting behind a proxy.** Behind a reverse proxy, every client shares the proxy's address, so the sign-in lock would apply per username across all clients. Set `TRUST_PROXY=true` to take each client's address from `X-Forwarded-For` instead, and make sure the server can't be reached except through the proxy: a client connecting directly could otherwise send a fake address and get around the lock.
 
 ## Reporting a vulnerability
 

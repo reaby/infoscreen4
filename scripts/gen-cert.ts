@@ -8,7 +8,8 @@
 //
 // Usage: tsx scripts/gen-cert.ts [--if-missing] [extra-hostname-or-ip ...]
 //        (extra names can also be given as CERT_HOSTS="name1,10.0.0.5")
-//   --if-missing  do nothing when a server certificate already exists (container start-up)
+//   --if-missing  do nothing when a server certificate already exists, or when
+//                 DISABLE_HTTPS is set (container start-up)
 
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -16,7 +17,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { isIP } from "node:net";
 import { hostname, networkInterfaces, tmpdir } from "node:os";
 import path from "node:path";
-import { getTlsFiles, type TlsFiles } from "../app/lib/tlsFiles";
+import { getTlsFiles, isHttpsDisabled, type TlsFiles } from "../app/lib/tlsFiles";
 
 const CA_VALIDITY_DAYS = 3650;
 const SERVER_VALIDITY_DAYS = 825; // the longest validity Apple devices accept
@@ -105,6 +106,10 @@ function main(): void {
     const extraNames = args.filter((arg) => !arg.startsWith("--"));
     const files = getTlsFiles();
 
+    if (ifMissing && isHttpsDisabled()) {
+        console.log("HTTPS is disabled (DISABLE_HTTPS); not generating a certificate.");
+        return;
+    }
     if (ifMissing && existsSync(files.key) && existsSync(files.cert)) {
         console.log(`TLS certificate found (${display(files.cert)}); not generating a new one.`);
         return;

@@ -22,6 +22,14 @@ export function getTlsFiles(): TlsFiles {
     };
 }
 
+/**
+ * DISABLE_HTTPS=true serves plain HTTP even when certificate files exist, for running
+ * behind a reverse proxy that terminates TLS.
+ */
+export function isHttpsDisabled(): boolean {
+    return ["true", "1", "yes"].includes((process.env.DISABLE_HTTPS ?? "").trim().toLowerCase());
+}
+
 /** The key and certificate the server uses: SSL_KEY / SSL_CERT, else the data directory. */
 export function resolveServerTlsFiles(): Pick<TlsFiles, "key" | "cert"> {
     const defaults = getTlsFiles();

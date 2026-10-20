@@ -19,6 +19,8 @@ Set these in `.env` (loaded by `pnpm run dev` / `pnpm run start`) or through you
 | `NODE_ENV` | — | Set to `production` for production builds. Any other value runs in development mode. |
 | `HOST` | `0.0.0.0` | Address to bind to. `0.0.0.0` listens on all interfaces. |
 | `PORT` | `3000` | Port for HTTP/HTTPS and WebSockets. |
+| `DISABLE_HTTPS` | `false` | Set to `true` to serve plain HTTP even when certificate files exist. In Docker it also skips creating the certificate on start. Use it behind a reverse proxy that terminates TLS. |
+| `TRUST_PROXY` | — | Behind a reverse proxy, set to `true` to read each client's address from `X-Forwarded-For`, or to a number when several proxies are chained. Failed-login lockouts use this address. Only set it when clients can't reach the server except through the proxy. |
 | `SSL_KEY` | `<data>/key.pem` | Path to the TLS private key. |
 | `SSL_CERT` | `<data>/cert.pem` | Path to the TLS certificate. |
 | `CERT_HOSTS` | — | Comma-separated extra hostnames or IP addresses for `pnpm run gen-cert` to put in the certificate, e.g. `infoscreen.lan,192.168.1.10`. |
@@ -31,7 +33,7 @@ Set these in `.env` (loaded by `pnpm run dev` / `pnpm run start`) or through you
 
 ## HTTPS
 
-The server switches to HTTPS automatically when both the key and the certificate files exist.
+The server switches to HTTPS automatically when both the key and the certificate files exist, unless `DISABLE_HTTPS=true` is set.
 
 To generate a certificate for your LAN (requires `openssl`):
 
@@ -70,9 +72,10 @@ Browsers only allow camera and screen capture on a **secure context**: `https://
 
 ### Behind a reverse proxy
 
-You can also terminate TLS in a reverse proxy (nginx, Caddy, Traefik) and run Infoscreen4 over plain HTTP behind it. The proxy must:
+You can also terminate TLS in a reverse proxy (nginx, Caddy, Traefik) and run Infoscreen4 over plain HTTP behind it. Set `DISABLE_HTTPS=true`, so the server serves plain HTTP even if certificate files exist and the Docker container doesn't create them. Also set `TRUST_PROXY=true`: otherwise every request appears to come from the proxy, and a few wrong passwords for one username lock that username out for everyone. The proxy must:
 
 - forward WebSocket upgrades for `/socket.io/`
+- append the client's address to `X-Forwarded-For` (Caddy and Traefik do this by default)
 - set `X-Forwarded-Proto: https`, so the session cookie is marked `Secure`
 - pass the original `Host` header, or set `X-Forwarded-Host`, so socket connections pass the origin check. Otherwise, add the public address to `ALLOWED_ORIGINS`.
 
@@ -86,8 +89,12 @@ location / {
     proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
 ```
+
+{: .warning }
+With `TRUST_PROXY` set, make sure clients can only reach the server through the proxy, for example by binding it to `127.0.0.1` or not publishing the container's port. A client that connects directly can put any address in `X-Forwarded-For` and get around the login lockout.
 
 See [Security](../reference/security) before exposing the server to the internet.
 

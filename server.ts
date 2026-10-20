@@ -9,17 +9,18 @@ import { getDisplayConfigs, ensureDisplayId, setDisplayConfigs, DisplayConfig } 
 import { resolveTransition, TransitionConfig } from "./app/lib/transitions";
 import { setContentChangedListener } from "./app/lib/contentEvents";
 import { isAllowedOrigin, resolveSocketIdentity, SocketRole } from "./app/lib/socketAuth";
-import { CLIENT_ADDRESS_HEADER } from "./app/lib/clientAddress";
+import { CLIENT_ADDRESS_HEADER, getTrustedProxyHops, resolveClientAddress } from "./app/lib/clientAddress";
 import { getAllUsers } from "./app/lib/auth";
 import { getOrCreateSetupCode } from "./app/lib/setupCode";
-import { resolveServerTlsFiles } from "./app/lib/tlsFiles";
+import { isHttpsDisabled, resolveServerTlsFiles } from "./app/lib/tlsFiles";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const hostname = process.env.HOST ?? "0.0.0.0";
 
 const tls = resolveServerTlsFiles();
-const useHttps = existsSync(tls.key) && existsSync(tls.cert);
+const httpsDisabled = isHttpsDisabled();
+const useHttps = !httpsDisabled && existsSync(tls.key) && existsSync(tls.cert);
 
 // Shared server state
 interface ActiveSlide {
@@ -312,8 +313,9 @@ const app = next({ dev, turbopack: dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
+    const trustedProxyHops = getTrustedProxyHops();
     const handleWithClientAddress = (req: IncomingMessage, res: ServerResponse) => {
-        req.headers[CLIENT_ADDRESS_HEADER] = req.socket.remoteAddress ?? "unknown";
+        req.headers[CLIENT_ADDRESS_HEADER] = resolveClientAddress(req, trustedProxyHops);
         return handle(req, res);
     };
 
@@ -602,7 +604,9 @@ app.prepare().then(() => {
     httpServer.listen(port, hostname, () => {
         const proto = useHttps ? "https" : "http";
         console.log(`> Ready on ${proto}://${hostname}:${port} [${dev ? "dev" : "production"}]`);
-        if (!useHttps) {
+        if (httpsDisabled) {
+            console.log(`> HTTPS disabled by DISABLE_HTTPS — terminate TLS in the reverse proxy in front of this server.`);
+        } else if (!useHttps) {
             console.log(`> Running HTTP only — WebRTC screen/camera capture requires HTTPS on non-localhost origins.`);
             console.log(`> To enable HTTPS, run "pnpm run gen-cert" (creates ${tls.cert} + ${tls.key}) and restart.`);
         }

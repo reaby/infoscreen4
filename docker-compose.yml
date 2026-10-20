@@ -14,4 +14,11 @@ services:
       # Names and addresses displays use to reach this server, added to the TLS
       # certificate created on first start (the container can't see the host's LAN IP).
       # CERT_HOSTS: 'infoscreen.lan,192.168.1.10'
+      # Behind a reverse proxy that terminates TLS: serve plain HTTP and skip
+      # creating the certificate.
+      # DISABLE_HTTPS: 'true'
+      # Behind a reverse proxy: read the client's address from X-Forwarded-For, so
+      # failed-login lockouts apply per client instead of to the proxy's address.
+      # Only set this when the server can't be reached except through the proxy.
+      # TRUST_PROXY: 'true'
     restart: unless-stopped
