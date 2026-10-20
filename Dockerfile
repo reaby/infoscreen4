@@ -3,13 +3,15 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies using npm
-COPY package.json ./
-RUN npm install
+# Install dependencies with pnpm from the lockfile, so the image gets the same
+# versions (and the security overrides in pnpm-workspace.yaml) as local installs.
+RUN npm install -g pnpm@10.26.2
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN pnpm install --frozen-lockfile
 
 # Build the Next.js app
 COPY . ./
-RUN npm run build
+RUN pnpm run build
 
 # Final runtime image
 FROM node:24-alpine AS runner

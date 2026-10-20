@@ -1,6 +1,11 @@
 onlyBuiltDependencies:
-  - canvas
   - esbuild
+
+# canvas is an optional dependency of fabric, used only by fabric's Node build,
+# which this app doesn't load; building it on Alpine needs Python and cairo.
+ignoredBuiltDependencies:
+  - canvas
+  - unrs-resolver
 
 overrides:
   '@babel/core@<=7.29.0': '>=7.29.6'
