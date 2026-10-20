@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { authorize } from "@/app/lib/authorization";
+import { getFontsDir, isValidFileName, resolveFileIn } from "@/app/lib/paths";
 import { readFile, unlink, rename, stat } from "fs/promises";
-import path from "path";
-import { getFontsDir } from "@/app/lib/paths";
 import { notModifiedResponse, validatorHeaders } from "@/app/lib/fileValidators";
-
-const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 
 const MIME: Record<string, string> = {
     woff: "font/woff", woff2: "font/woff2", ttf: "font/ttf", otf: "font/otf",
@@ -16,11 +13,7 @@ function mimeFor(filename: string) {
 }
 
 function safePath(file: string): string | null {
-    const fontsDir = getFontsDir();
-    if (!NAME_RE.test(file)) return null;
-    const resolved = path.resolve(path.join(fontsDir, file));
-    if (!resolved.startsWith(path.resolve(fontsDir))) return null;
-    return resolved;
+    return resolveFileIn(getFontsDir(), file);
 }
 
 export async function GET(
@@ -78,7 +71,7 @@ export async function PATCH(
 
     const body = await req.json().catch(() => null);
     const newName: unknown = body?.newName;
-    if (typeof newName !== "string" || !NAME_RE.test(newName)) {
+    if (typeof newName !== "string" || !isValidFileName(newName)) {
         return NextResponse.json({ error: "Invalid new filename" }, { status: 400 });
     }
 

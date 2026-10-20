@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
 import { authorize } from "@/app/lib/authorization";
+import { getImagesDir, isValidFileName, resolveFileIn } from "@/app/lib/paths";
 import { unlink, rename, stat } from "fs/promises";
-import path from "path";
 import { notModifiedResponse, validatorHeaders } from "@/app/lib/fileValidators";
 import { streamFile } from "@/app/lib/fileStream";
-
-const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
-const IMAGES_DIR = process.env.INFOSCREEN_DATA_DIR
-    ? path.join(path.resolve(process.env.INFOSCREEN_DATA_DIR), "images")
-    : path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "images");
 
 const MIME: Record<string, string> = {
     jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
@@ -21,10 +16,7 @@ function mimeFor(filename: string) {
 }
 
 function safePath(file: string): string | null {
-    if (!NAME_RE.test(file)) return null;
-    const resolved = path.resolve(path.join(IMAGES_DIR, file));
-    if (!resolved.startsWith(path.resolve(IMAGES_DIR))) return null;
-    return resolved;
+    return resolveFileIn(getImagesDir(), file);
 }
 
 export async function GET(
@@ -82,7 +74,7 @@ export async function PATCH(
 
     const body = await req.json().catch(() => null);
     const newName: unknown = body?.newName;
-    if (typeof newName !== "string" || !NAME_RE.test(newName)) {
+    if (typeof newName !== "string" || !isValidFileName(newName)) {
         return NextResponse.json({ error: "Invalid new filename" }, { status: 400 });
     }
 

@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { authorize } from "@/app/lib/authorization";
+import { getVideosDir, isValidFileName, resolveFileIn } from "@/app/lib/paths";
 import { writeFile, unlink, rename, stat } from "fs/promises";
-import path from "path";
-import { getVideosDir } from "@/app/lib/paths";
 import { isRangeStillValid, notModifiedResponse, validatorHeaders } from "@/app/lib/fileValidators";
 import { streamFile } from "@/app/lib/fileStream";
-
-const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 
 function sidecarFor(filePath: string): string {
     return `${filePath}.json`;
@@ -23,11 +20,7 @@ function mimeFor(filename: string) {
 }
 
 function safePath(file: string): string | null {
-    const videosDir = getVideosDir();
-    if (!NAME_RE.test(file)) return null;
-    const resolved = path.resolve(path.join(videosDir, file));
-    if (!resolved.startsWith(path.resolve(videosDir))) return null;
-    return resolved;
+    return resolveFileIn(getVideosDir(), file);
 }
 
 export async function GET(
@@ -130,7 +123,7 @@ export async function PATCH(
         }
     }
 
-    if (typeof newName !== "string" || !NAME_RE.test(newName)) {
+    if (typeof newName !== "string" || !isValidFileName(newName)) {
         return NextResponse.json({ error: "Invalid new filename" }, { status: 400 });
     }
 

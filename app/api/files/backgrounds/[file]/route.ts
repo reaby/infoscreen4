@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { authorize } from "@/app/lib/authorization";
+import { getBackgroundsDir, isValidFileName, resolveFileIn } from "@/app/lib/paths";
 import { unlink, rename, stat } from "fs/promises";
-import path from "path";
-import { getBackgroundsDir } from "@/app/lib/paths";
 import { isRangeStillValid, notModifiedResponse, validatorHeaders } from "@/app/lib/fileValidators";
 import { streamFile } from "@/app/lib/fileStream";
-
-const NAME_RE = /^[a-zA-Z0-9._\- ]+$/;
 
 const MIME: Record<string, string> = {
     mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg",
@@ -19,11 +16,7 @@ function mimeFor(filename: string) {
 }
 
 function safePath(file: string): string | null {
-    const bgDir = getBackgroundsDir();
-    if (!NAME_RE.test(file)) return null;
-    const resolved = path.resolve(path.join(bgDir, file));
-    if (!resolved.startsWith(path.resolve(bgDir))) return null;
-    return resolved;
+    return resolveFileIn(getBackgroundsDir(), file);
 }
 
 export async function GET(
@@ -115,7 +108,7 @@ export async function PATCH(
 
     const body = await req.json().catch(() => null);
     const newName: unknown = body?.newName;
-    if (typeof newName !== "string" || !NAME_RE.test(newName)) {
+    if (typeof newName !== "string" || !isValidFileName(newName)) {
         return NextResponse.json({ error: "Invalid new filename" }, { status: 400 });
     }
 
