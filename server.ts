@@ -2,6 +2,7 @@ import "./app/lib/nodeVersionCheck"; // must stay first: exits on a too-old Node
 import { createServer as createHttpServer, IncomingMessage, ServerResponse } from "http";
 import { createServer as createHttpsServer } from "https";
 import { readFileSync, existsSync } from "fs";
+import { styleText } from "util";
 import next from "next";
 import { Server as SocketIOServer } from "socket.io";
 import { bundleManager } from "./app/lib/BundleManager";
@@ -17,6 +18,8 @@ import { isHttpsDisabled, resolveServerTlsFiles } from "./app/lib/tlsFiles";
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const hostname = process.env.HOST ?? "0.0.0.0";
+let memoryStart = process.memoryUsage.rss();
+const startStamp = Date.now();
 
 const tls = resolveServerTlsFiles();
 const httpsDisabled = isHttpsDisabled();
@@ -54,7 +57,6 @@ const displayConnections: Record<string, number> = {};
 const displayCycleTimers: Record<string, ReturnType<typeof setTimeout> | null> = {};
 const displayCycleSlides: Record<string, CycleSlide[]> = {};
 const displayCycleIndex: Record<string, number> = {};
-const displayCycleBaseDuration: Record<string, number> = {};
 const displayQueuedNext: Record<string, string | null> = {};
 let io: SocketIOServer | null = null;
 
@@ -78,6 +80,31 @@ const displayActiveStream = new Map<string, string>();  // displayId → streamI
 const socketToWatchedStream = new Map<string, string>(); // viewerSocketId → streamId
 const streamOwners = new Map<string, string>();         // streamId → username of the streamer
 
+/** Formats a duration in milliseconds as hours, minutes and seconds, e.g. "26h 03m 07s". */
+function formatDuration(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
+}
+
+function showMemory() {
+    if (dev) {
+        const now = process.memoryUsage.rss();
+        const diff = now - memoryStart;
+        const uptime = formatDuration(Date.now() - startStamp);
+        // Live JS objects; unlike RSS, it drops back after garbage collection, so a steady rise points to a leak.
+        const heapUsed = process.memoryUsage().heapUsed;
+        const toMb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)}mb`;
+        const uptimeLabel = styleText("cyan", "Uptime:");
+        const memoryLabel = styleText("green", "Memory now:");
+        const diffLabel = styleText("yellow", "Diff:");
+        const heapLabel = styleText("magenta", "Heap used:");
+        console.log(`${uptimeLabel} ${uptime} | ${memoryLabel} ${toMb(now)} | ${diffLabel} ${toMb(diff)} | ${heapLabel} ${toMb(heapUsed)}`);
+    }
+}
 function emitAdminStreams() {
     if (!io) return;
     io.to("admins").emit("streams:update", [...streams.values()]);
@@ -125,6 +152,14 @@ function getBundleSlides(bundle: string): CycleSlide[] {
     return bundleManager.getOrderedSlides(bundle, { activeOnly: true });
 }
 
+const FALLBACK_SLIDE_DURATION = 10; // seconds, for bundles without a default duration
+
+/** The bundle's default slide duration in seconds (<=0 = manual); slides may override it. */
+function getBundleBaseDuration(bundle: string): number {
+    const duration = bundleManager.getMeta(bundle).defaultDuration;
+    return typeof duration === "number" && Number.isFinite(duration) ? duration : FALLBACK_SLIDE_DURATION;
+}
+
 function resolveSlideDuration(slide: CycleSlide | undefined, fallbackDuration: number): number {
     const override = slide?.duration;
     if (typeof override === "number" && Number.isFinite(override) && override >= 0) return override;
@@ -153,7 +188,6 @@ function normalizeDisplayKeys() {
             delete displayCycleTimers[key];
             delete displayCycleSlides[key];
             delete displayCycleIndex[key];
-            delete displayCycleBaseDuration[key];
             delete displayQueuedNext[key];
         }
     }
@@ -184,6 +218,18 @@ function emitDisplayState(displayId: string) {
     });
 }
 
+/**
+ * Shows the display's current slide on its screens and sends the same content to the
+ * admins, so their live preview doesn't need to fetch it over HTTP.
+ */
+function broadcastActiveSlide(displayId: string) {
+    const active = displayStates[displayId];
+    if (!io || !active) return;
+    const slide = enrichSlideData(active);
+    io.to(displayRoom(displayId)).emit("slide:show", slide);
+    io.to("admins").emit("display:slide", { displayId, slide });
+}
+
 function emitDisplayStatesToAll() {
     for (const conf of displayConfigs) {
         emitDisplayState(conf.id);
@@ -206,32 +252,43 @@ function stopCycle(displayId: string) {
     }
 }
 
+/**
+ * Shows the display's current slide (`initial`) and, when it has a duration, cycles on
+ * through its bundle from there. The only place a newly chosen slide is broadcast, so
+ * displays load it once.
+ */
 function startCycle(displayId: string, initial: ActiveSlide) {
     stopCycle(displayId);
-    if (initial.duration <= 0) return;
+    if (initial.duration <= 0) {
+        broadcastActiveSlide(displayId);
+        return;
+    }
 
-    displayCycleBaseDuration[displayId] = initial.duration;
     displayCycleSlides[displayId] = getBundleSlides(initial.bundle);
     displayCycleIndex[displayId] = displayCycleSlides[displayId].findIndex((s) => s.id === initial.slide);
     if (displayCycleIndex[displayId] < 0) displayCycleIndex[displayId] = 0;
 
     const initialEntry = displayCycleSlides[displayId][displayCycleIndex[displayId]];
-    const initialDelay = resolveSlideDuration(initialEntry, displayCycleBaseDuration[displayId]);
+    const initialDelay = resolveSlideDuration(initialEntry, initial.duration);
     if (displayStates[displayId]) {
         displayStates[displayId] = { ...displayStates[displayId]!, duration: initialDelay };
-        if (io) {
-            io.to(displayRoom(displayId)).emit("slide:show", enrichSlideData(displayStates[displayId]!));
-        }
     }
+    broadcastActiveSlide(displayId);
     emitAdminState();
     if (initialDelay <= 0) return;
 
+    const endCycle = () => {
+        stopCycle(displayId);
+        emitAdminState();
+    };
+
     const tick = () => {
-        if (!displayStates[displayId]) return;
+        showMemory();
+        if (!displayStates[displayId]) return endCycle();
         const currentActive = displayStates[displayId]!;
         const bundle = currentActive.bundle;
         displayCycleSlides[displayId] = getBundleSlides(bundle);
-        if (displayCycleSlides[displayId].length === 0) return;
+        if (displayCycleSlides[displayId].length === 0) return endCycle();
         const currentIdx = displayCycleSlides[displayId].findIndex((s) => s.id === currentActive.slide);
         const queuedId = displayQueuedNext[displayId];
         let nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % displayCycleSlides[displayId].length;
@@ -242,17 +299,11 @@ function startCycle(displayId: string, initial: ActiveSlide) {
         }
         displayCycleIndex[displayId] = nextIdx;
         const nextEntry = displayCycleSlides[displayId][displayCycleIndex[displayId]];
-        const nextDelay = resolveSlideDuration(nextEntry, displayCycleBaseDuration[displayId]);
+        const nextDelay = resolveSlideDuration(nextEntry, getBundleBaseDuration(bundle));
         displayStates[displayId] = { bundle, slide: nextEntry.id, duration: nextDelay };
-        if (io) {
-            io.to(displayRoom(displayId)).emit("slide:show", enrichSlideData(displayStates[displayId]));
-        }
+        broadcastActiveSlide(displayId);
+        if (nextDelay <= 0) return endCycle();
         emitAdminState();
-        if (nextDelay <= 0) {
-            stopCycle(displayId);
-            emitAdminState();
-            return;
-        }
         displayCycleTimers[displayId] = setTimeout(tick, nextDelay * 1000);
     };
     displayCycleTimers[displayId] = setTimeout(tick, initialDelay * 1000);
@@ -385,6 +436,9 @@ app.prepare().then(() => {
 
         if (role === "admin") {
             socket.join("admins");
+            for (const [id, active] of Object.entries(displayStates)) {
+                if (active) socket.emit("display:slide", { displayId: id, slide: enrichSlideData(active) });
+            }
             socket.emit("state:sync", getServerState());
 
             socket.on("slide:show", (data: ActiveSlide & { displayId: string }) => {
@@ -392,9 +446,6 @@ app.prepare().then(() => {
                 displayStates[targetId] = { bundle: data.bundle, slide: data.slide, duration: data.duration };
                 displayQueuedNext[targetId] = null;
                 persistActiveBundle(targetId, data.bundle);
-                if (io) {
-                    io.to(displayRoom(targetId)).emit("slide:show", enrichSlideData(displayStates[targetId]!));
-                }
                 startCycle(targetId, displayStates[targetId]!);
                 emitAdminState();
             });
@@ -470,12 +521,8 @@ app.prepare().then(() => {
                 displayQueuedNext[targetId] = null;
                 const slides = getBundleSlides(bundle);
                 if (slides.length > 0) {
-                    const duration = displayStates[targetId]?.duration ?? 10;
-                    const first = slides[0];
-                    displayStates[targetId] = { bundle, slide: first.id, duration: resolveSlideDuration(first, duration) };
-                    if (io) {
-                        io.to(displayRoom(targetId)).emit("slide:show", enrichSlideData(displayStates[targetId]!));
-                    }
+                    // startCycle applies the first slide's own duration on top of the bundle default.
+                    displayStates[targetId] = { bundle, slide: slides[0].id, duration: getBundleBaseDuration(bundle) };
                     startCycle(targetId, displayStates[targetId]!);
                 }
 
@@ -614,14 +661,14 @@ app.prepare().then(() => {
         getAllUsers().then((users) => {
             if (users.length === 0) getOrCreateSetupCode();
         });
+        memoryStart = process.memoryUsage.rss();
 
         // Boot active bundles for all displays
         for (const config of displayConfigs) {
             if (config.activeBundle) {
                 const slides = getBundleSlides(config.activeBundle);
                 if (slides.length > 0) {
-                    const first = slides[0];
-                    const state = { bundle: config.activeBundle, slide: first.id, duration: resolveSlideDuration(first, 10) };
+                    const state = { bundle: config.activeBundle, slide: slides[0].id, duration: getBundleBaseDuration(config.activeBundle) };
                     displayStates[config.id] = state;
                     startCycle(config.id, state);
                 }

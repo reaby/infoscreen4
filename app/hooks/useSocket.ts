@@ -50,8 +50,29 @@ export interface ServerState {
     streams: StreamInfo[];
 }
 
+interface DisplaySlideUpdate {
+    displayId: string;
+    slide: ActiveSlide;
+}
+
+type DisplayStates = ServerState["displayStates"];
+
+/**
+ * state:sync carries only which slide each display shows; its content (JSON, bundle
+ * meta) arrives separately in display:slide. Attaches the content to every display
+ * state that still shows that slide.
+ */
+function withSlideContent(states: DisplayStates, content: Record<string, ActiveSlide>): DisplayStates {
+    return Object.fromEntries(Object.entries(states).map(([id, state]) => {
+        const known = content[id];
+        const matches = state && known && known.bundle === state.bundle && known.slide === state.slide;
+        return [id, matches ? { ...state, json: known.json, bundleMeta: known.bundleMeta } : state];
+    }));
+}
+
 export function useSocket(role: SocketRole, displayId?: string) {
     const socketRef = useRef<Socket | null>(null);
+    const slideContentRef = useRef<Record<string, ActiveSlide>>({});
     const [connected, setConnected] = useState(false);
     const [state, setState] = useState<ServerState>({
         activeSlide: null,
@@ -85,8 +106,19 @@ export function useSocket(role: SocketRole, displayId?: string) {
             const incoming = s.streams ?? [];
             const same = prev.streams.length === incoming.length &&
                 prev.streams.every((p, i) => p.streamId === incoming[i]?.streamId && p.socketId === incoming[i]?.socketId);
-            return { ...s, streams: same ? prev.streams : incoming };
+            return {
+                ...s,
+                displayStates: withSlideContent(s.displayStates ?? {}, slideContentRef.current),
+                streams: same ? prev.streams : incoming,
+            };
         }));
+        socket.on("display:slide", ({ displayId: id, slide }: DisplaySlideUpdate) => {
+            slideContentRef.current = { ...slideContentRef.current, [id]: slide };
+            setState((prev) => ({
+                ...prev,
+                displayStates: withSlideContent(prev.displayStates, slideContentRef.current),
+            }));
+        });
         socket.on("display:state:sync", (s: ServerState) => setState(s));
         socket.on("displays:count", (count: number) =>
             setState((prev) => ({ ...prev, connectedDisplays: count }))
