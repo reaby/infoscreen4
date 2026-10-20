@@ -29,6 +29,14 @@ interface DisplayPageProps {
     displayId?: string;
 }
 
+function toggleFullscreen() {
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+    } else {
+        document.documentElement.requestFullscreen().catch(() => {});
+    }
+}
+
 export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
     const defer = (fn: () => void) => queueMicrotask(fn);
     const { state, bundleMetaUpdate, socketRef, connected } = useSocket("display", displayId);
@@ -203,7 +211,7 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
     }, [connected, socketRef]);
 
     return (
-        <div className="display-root">
+        <div className="display-root" onDoubleClick={toggleFullscreen}>
             {!state.activeSlide && !activeStream && (
                 <div className="display-standby">
                     <span className="display-standby-text">Standby</span>
