@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useSocket } from "../hooks/useSocket";
+import { ActiveSlide, useSocket } from "../hooks/useSocket";
 import { BundleMeta } from "../interfaces/BundleMeta";
 import { DEFAULT_TRANSITION } from "../lib/transitions";
 import SlideTransition from "./SlideTransition";
@@ -29,6 +29,20 @@ interface DisplayPageProps {
     displayId?: string;
 }
 
+// The slide on screen together with its loaded content. They are committed as one
+// unit so a transition never starts with the previous slide's content in the new layer.
+interface ShownSlide {
+    slide: ActiveSlide | null;
+    json: object | null;
+    meta: BundleMeta;
+}
+
+const STANDBY: ShownSlide = { slide: null, json: null, meta: {} };
+
+function transitionKeyOf(slide: ActiveSlide | null): string {
+    return slide ? `${slide.bundle}:${slide.slide}` : "__standby__";
+}
+
 function toggleFullscreen() {
     if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
@@ -40,8 +54,7 @@ function toggleFullscreen() {
 export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
     const defer = (fn: () => void) => queueMicrotask(fn);
     const { state, bundleMetaUpdate, socketRef, connected } = useSocket("display", displayId);
-    const [displayJson, setDisplayJson] = useState<object | null>(null);
-    const [bundleMeta, setBundleMeta] = useState<BundleMeta>({});
+    const [shown, setShown] = useState<ShownSlide>(STANDBY);
     const loadSeqRef = useRef(0);
 
     // WebRTC stream state
@@ -60,25 +73,23 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
     // Slide loading
     useEffect(() => {
         const active = state.activeSlide;
+        const seq = ++loadSeqRef.current;
+        const show = (json: object | null, meta: BundleMeta) => {
+            if (loadSeqRef.current !== seq) return;
+            setShown({ slide: active, json, meta });
+        };
+
         if (!active) {
-            defer(() => {
-                setDisplayJson(null);
-                setBundleMeta({});
-            });
+            defer(() => setShown(STANDBY));
             return;
         }
 
         const hasSocketJson = active.json != null;
         const hasSocketMeta = active.bundleMeta != null;
         if (hasSocketJson && hasSocketMeta) {
-            defer(() => {
-                setBundleMeta(active.bundleMeta as BundleMeta);
-                setDisplayJson(active.json as object);
-            });
+            defer(() => show(active.json as object, active.bundleMeta as BundleMeta));
             return;
         }
-
-        const seq = ++loadSeqRef.current;
 
         const metaPromise = hasSocketMeta
             ? Promise.resolve(active.bundleMeta as BundleMeta)
@@ -86,37 +97,33 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
                 .then((r) => r.json()).catch(() => ({}));
 
         metaPromise.then((meta) => {
-            if (loadSeqRef.current !== seq) return;
             const resolvedMeta = (meta ?? {}) as BundleMeta;
-            setBundleMeta(resolvedMeta);
 
             if (hasSocketJson) {
-                if (active.json) setDisplayJson(active.json as object);
+                show(active.json as object, resolvedMeta);
                 return;
             }
             // Website/video/image slides have no fabric JSON on disk — fetching it always 400s.
-            // Clear the previous slide's JSON so the hidden canvas doesn't keep running it.
             const entryType = resolvedMeta.slides?.find((s) => s.id === active.slide)?.type;
             if (entryType && entryType !== "fabric") {
-                setDisplayJson(null);
+                show(null, resolvedMeta);
                 return;
             }
 
             fetch(`/api/bundles/${encodeURIComponent(active.bundle)}/slides/${encodeURIComponent(active.slide)}`)
                 .then((r) => r.json()).catch(() => null)
-                .then((json) => {
-                    if (loadSeqRef.current !== seq) return;
-                    if (json) setDisplayJson(json);
-                });
+                .then((json) => show(json, resolvedMeta));
         });
     }, [state.activeSlide]);
 
     useEffect(() => {
         if (!bundleMetaUpdate) return;
-        const active = state.activeSlide;
-        if (!active || active.bundle !== bundleMetaUpdate.bundle) return;
-        defer(() => setBundleMeta(bundleMetaUpdate.meta as BundleMeta));
-    }, [bundleMetaUpdate, state.activeSlide]);
+        defer(() => setShown((prev) => (
+            prev.slide?.bundle === bundleMetaUpdate.bundle
+                ? { ...prev, meta: bundleMetaUpdate.meta as BundleMeta }
+                : prev
+        )));
+    }, [bundleMetaUpdate]);
 
     // WebRTC stream handling
     useEffect(() => {
@@ -212,19 +219,19 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
 
     return (
         <div className="display-root" onDoubleClick={toggleFullscreen}>
-            {!state.activeSlide && !activeStream && (
+            {!shown.slide && !activeStream && (
                 <div className="display-standby">
                     <span className="display-standby-text">Standby</span>
                 </div>
             )}
             <SlideTransition
-                transitionKey={state.activeSlide ? `${state.activeSlide.bundle}:${state.activeSlide.slide}` : "__standby__"}
-                transition={state.activeSlide?.transition ?? DEFAULT_TRANSITION}
+                transitionKey={transitionKeyOf(shown.slide)}
+                transition={shown.slide?.transition ?? DEFAULT_TRANSITION}
             >
                 <DisplaySlide
-                    json={displayJson}
-                    bundleMeta={bundleMeta}
-                    activeEntry={bundleMeta.slides?.find(s => s.id === state.activeSlide?.slide) ?? null}
+                    json={shown.json}
+                    bundleMeta={shown.meta}
+                    activeEntry={shown.meta.slides?.find(s => s.id === shown.slide?.slide) ?? null}
                     announcementActive={!!announcement && (!!announcement.line1 || !!announcement.line2)}
                 />
             </SlideTransition>
