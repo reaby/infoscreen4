@@ -9,6 +9,8 @@ export type SocketRole = "admin" | "display";
 export interface DisplayConfig {
     id: string;
     name: string;
+    autoShowStreams?: boolean;
+    streamMultiview?: boolean;
 }
 
 export interface ActiveSlide {
@@ -47,6 +49,7 @@ export interface ServerState {
     displayCycling: Record<string, boolean>;
     displayQueuedNext: Record<string, string | null>;
     displayAnnouncements: Record<string, DisplayAnnouncement | null>;
+    displayStreams: Record<string, string[]>; // displayId → streamIds shown
     streams: StreamInfo[];
 }
 
@@ -84,6 +87,7 @@ export function useSocket(role: SocketRole, displayId?: string) {
         displayCycling: {},
         displayQueuedNext: {},
         displayAnnouncements: {},
+        displayStreams: {},
         streams: [],
     });
     const [bundleMetaUpdate, setBundleMetaUpdate] = useState<BundleMetaUpdate | null>(null);
@@ -171,8 +175,8 @@ export function useSocket(role: SocketRole, displayId?: string) {
         socketRef.current?.emit("stream:show", { streamId, displayId });
     };
 
-    const clearStream = (displayId: string) => {
-        socketRef.current?.emit("stream:clear", { displayId });
+    const clearStream = (displayId: string, streamId?: string) => {
+        socketRef.current?.emit("stream:clear", { displayId, streamId });
     };
 
     const showAnnouncement = (displayId: string, line1: string, line2: string, color: string) => {

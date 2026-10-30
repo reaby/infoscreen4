@@ -34,8 +34,38 @@ interface Props {
     displayConfigs: DisplayConfig[];
     selectedDisplay: string | null;
     onShowStream: (streamId: string, displayId: string) => void;
-    onClearStream: (displayId: string) => void;
-    displayActiveStreams: Record<string, string>; // displayId → streamId
+    onClearStream: (displayId: string, streamId: string) => void;
+    onDisplayOptionsChange: (displayId: string, options: StreamDisplayOptions) => void;
+    displayActiveStreams: Record<string, string[]>; // displayId → streamIds shown
+}
+
+export type StreamDisplayOptions = Pick<DisplayConfig, "autoShowStreams" | "streamMultiview">;
+
+function OptionCheckbox({ checked, onChange, children }: { checked: boolean; onChange: (checked: boolean) => void; children: React.ReactNode }) {
+    return (
+        <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => onChange(e.target.checked)}
+                className="w-3.5 h-3.5 accent-blue-500"
+            />
+            {children}
+        </label>
+    );
+}
+
+function DisplayStreamOptions({ display, onChange }: { display: DisplayConfig; onChange: (options: StreamDisplayOptions) => void }) {
+    return (
+        <div className="flex flex-col gap-1">
+            <OptionCheckbox checked={display.autoShowStreams === true} onChange={(autoShowStreams) => onChange({ autoShowStreams })}>
+                Auto-show new streams on {display.name}
+            </OptionCheckbox>
+            <OptionCheckbox checked={display.streamMultiview === true} onChange={(streamMultiview) => onChange({ streamMultiview })}>
+                Multiview: show several streams as a grid
+            </OptionCheckbox>
+        </div>
+    );
 }
 
 export default function StreamsPanel({
@@ -45,6 +75,7 @@ export default function StreamsPanel({
     selectedDisplay,
     onShowStream,
     onClearStream,
+    onDisplayOptionsChange,
     displayActiveStreams,
 }: Props) {
     const entriesRef = useRef<Map<string, StreamEntry>>(new Map());
@@ -143,11 +174,16 @@ export default function StreamsPanel({
     }, []);
 
     const targetDisplay = selectedDisplay ?? displayConfigs[0]?.id ?? null;
-    const activeStreamIdForTarget = targetDisplay ? displayActiveStreams[targetDisplay] : null;
+    const targetDisplayConfig = displayConfigs.find((conf) => conf.id === targetDisplay) ?? null;
+    const shownOnTarget = targetDisplay ? displayActiveStreams[targetDisplay] ?? [] : [];
+    const displayOptions = targetDisplayConfig && (
+        <DisplayStreamOptions display={targetDisplayConfig} onChange={(options) => onDisplayOptionsChange(targetDisplayConfig.id, options)} />
+    );
 
     if (streams.length === 0) {
         return (
             <div className="flex flex-col gap-2">
+                {displayOptions}
                 <div className="text-xs text-gray-500 text-center py-6">
                     No active streams.{" "}
                     <a href="/send" target="_blank" className="text-blue-400 hover:underline">
@@ -161,10 +197,11 @@ export default function StreamsPanel({
 
     return (
         <div className="flex flex-col gap-2">
+            {displayOptions}
             {streams.map((stream) => {
                 const received = receivedMedia[stream.streamId];
                 const mediaStream = received?.socketId === stream.socketId ? received.stream : null;
-                const isActive = activeStreamIdForTarget === stream.streamId;
+                const isActive = shownOnTarget.includes(stream.streamId);
 
                 return (
                     <div key={stream.streamId} className="border border-gray-700 rounded-lg overflow-hidden bg-gray-900">
@@ -183,7 +220,7 @@ export default function StreamsPanel({
                                 isActive ? (
                                     <button
                                         className="text-xs bg-red-700 hover:bg-red-600 rounded px-2 py-1 transition-colors"
-                                        onClick={() => onClearStream(targetDisplay)}
+                                        onClick={() => onClearStream(targetDisplay, stream.streamId)}
                                     >
                                         Clear
                                     </button>

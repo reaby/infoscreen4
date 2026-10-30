@@ -36,8 +36,7 @@ Displays join the room for their display ID and receive:
 | `bundle:meta` | `{ bundle, meta }` | Bundle settings changed. |
 | `announce:show` | `{ line1, line2, color }` | Show a lower-third announcement. |
 | `announce:clear` | — | Remove the announcement. |
-| `stream:incoming` | `{ streamId, streamName, streamSocketId }` | Start watching a live stream. |
-| `stream:cleared` | — | Stop showing the stream. |
+| `streams:assigned` | `{ streams: [{ streamId, streamName, streamSocketId }] }` | The live streams to show, in grid order. Sent on connect and whenever the list changes. An empty list means no stream. |
 | `stream:ended` | `{ streamId }` | The sender stopped. |
 
 ## Admin clients
@@ -54,24 +53,24 @@ Admins join the `admins` room.
 | `cycle:queueNext` | `{ displayId, slideId \| null }` |
 | `bundle:activate` | `{ displayId, bundle }` |
 | `bundle:meta` | `{ bundle, meta, displayId? }` |
-| `display:config` | `{ configs: [{ id, name, activeBundle? }] }` |
+| `display:config` | `{ configs: [{ id, name, autoShowStreams?, streamMultiview? }] }` |
 | `announce:show` | `{ displayId, line1, line2, color }` |
 | `announce:showAll` | `{ line1, line2, color }` |
 | `announce:clearAll` | — |
 | `stream:show` | `{ streamId, displayId }` |
-| `stream:clear` | `{ displayId }` |
+| `stream:clear` | `{ displayId, streamId? }`: without `streamId`, removes every stream from the display |
 
 **Server → client**
 
 | Event | Description |
 |:--|:--|
-| `state:sync` | Full server state: displays, per-display slide, cycling, queued slide, announcements, connection counts, streams. |
+| `state:sync` | Full server state: displays, per-display slide, cycling, queued slide, announcements, connection counts, streams and the stream each display shows. |
 | `streams:update` | List of active streams. |
 | `content:changed` | Bundles or slides changed on disk; reload lists. |
 
 ## Streaming (WebRTC signaling)
 
-Admins may watch any stream. A display may only watch the stream assigned to it with `stream:show`. `stream:signal` is only relayed between a streamer and the viewers of its stream.
+Admins may watch any stream. A display may only watch the streams assigned to it, with `stream:show` or because the display auto-shows new streams. One connection may watch several streams at once. `stream:signal` is only relayed between a streamer and the viewers of its stream.
 
 | Event | Direction | Payload |
 |:--|:--|:--|

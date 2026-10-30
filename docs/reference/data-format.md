@@ -100,6 +100,8 @@ Editor slides, in Fabric.js canvas JSON format. These are global: any bundle can
 | `id` | Used in the display URL: `/display/<id>`. |
 | `name` | Name shown in the admin. |
 | `activeBundle` | Bundle the display plays. Updated when a bundle goes on air with ⚡ or Send to LIVE, and restored when the server starts. |
+| `autoShowStreams` | Optional. When `true`, a new stream from `/send` is shown on the display as soon as it starts. |
+| `streamMultiview` | Optional. When `true`, the display shows all its streams side by side in a grid instead of only the newest one. |
 
 ## `users.json`
 

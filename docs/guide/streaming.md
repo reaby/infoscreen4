@@ -33,6 +33,15 @@ The stream now appears in the admin's **Streams** panel.
 
 In `/admin`, select the display, open **Streams** in the header and click **Show on display**. The stream covers the slides until you click **Clear** or the sender stops.
 
+### Display options
+
+The top of the **Streams** panel has two options for the selected display. Both are saved per display.
+
+- **Auto-show new streams**: every new stream appears on the display right away, without clicking **Show on display**.
+- **Multiview**: the display shows several streams at once in a grid, as square as possible: two side by side, three or four as 2×2, five or six as 3×2, and so on. **Show on display** adds a stream to the grid and **Clear** removes only that stream. Without multiview, a new stream replaces the one showing. Turning multiview off keeps only the newest stream.
+
+With both options on, every sender joins the grid as soon as they start.
+
 ![Live streams in the admin]({{ '/assets/images/screenshots/streams.png' | relative_url }})
 
 The target bitrate is best effort. The actual quality depends on the browser and the network.

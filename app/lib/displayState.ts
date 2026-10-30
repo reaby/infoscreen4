@@ -5,6 +5,10 @@ export interface DisplayConfig {
     id: string;
     name: string;
     activeBundle?: string;
+    /** Streams started from /send are shown on this display as soon as they come in. */
+    autoShowStreams?: boolean;
+    /** Shows several streams at once as a grid instead of only the newest one. */
+    streamMultiview?: boolean;
 }
 
 const file = path.join(process.cwd(), "data", "display.json");

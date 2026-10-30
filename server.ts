@@ -42,6 +42,7 @@ interface ServerState {
     displayCycling: Record<string, boolean>;
     displayQueuedNext: Record<string, string | null>;
     displayAnnouncements: Record<string, { line1: string; line2: string; color: string } | null>;
+    displayStreams: Record<string, string[]>;
     streams: StreamInfo[];
 }
 
@@ -76,8 +77,8 @@ interface StreamInfo {
 }
 const streams = new Map<string, StreamInfo>();          // streamId → info
 const socketToStream = new Map<string, string>();       // socketId → streamId
-const displayActiveStream = new Map<string, string>();  // displayId → streamId
-const socketToWatchedStream = new Map<string, string>(); // viewerSocketId → streamId
+const displayStreams = new Map<string, string[]>();          // displayId → streamIds shown, oldest first
+const socketToWatchedStreams = new Map<string, Set<string>>(); // viewerSocketId → streamIds it watches
 const streamOwners = new Map<string, string>();         // streamId → username of the streamer
 
 /** Formats a duration in milliseconds as hours, minutes and seconds, e.g. "26h 03m 07s". */
@@ -123,6 +124,7 @@ function getServerState(): ServerState {
         ),
         displayQueuedNext: { ...displayQueuedNext },
         displayAnnouncements: { ...displayAnnouncements },
+        displayStreams: Object.fromEntries(displayStreams),
         streams: [...streams.values()],
     };
 }
@@ -309,18 +311,57 @@ function startCycle(displayId: string, initial: ActiveSlide) {
     displayCycleTimers[displayId] = setTimeout(tick, initialDelay * 1000);
 }
 
-function emitStreamIncoming(displayId: string, stream: StreamInfo) {
-    io?.to(displayRoom(displayId)).emit("stream:incoming", {
-        streamId: stream.streamId,
-        streamName: stream.name,
-        streamSocketId: stream.socketId,
-    });
+function isMultiview(displayId: string): boolean {
+    return displayConfigs.some((conf) => conf.id === displayId && conf.streamMultiview);
+}
+
+/** The streams a display should show, in the form display clients connect with. */
+function getAssignedStreams(displayId: string) {
+    return (displayStreams.get(displayId) ?? [])
+        .map((streamId) => streams.get(streamId))
+        .filter((stream): stream is StreamInfo => !!stream)
+        .map((stream) => ({ streamId: stream.streamId, streamName: stream.name, streamSocketId: stream.socketId }));
+}
+
+function emitAssignedStreams(displayId: string) {
+    io?.to(displayRoom(displayId)).emit("streams:assigned", { streams: getAssignedStreams(displayId) });
+}
+
+function setDisplayStreams(displayId: string, streamIds: string[]) {
+    if (streamIds.length > 0) displayStreams.set(displayId, streamIds);
+    else displayStreams.delete(displayId);
+    emitAssignedStreams(displayId);
+}
+
+/** In multiview the stream joins the grid; otherwise it replaces the one showing. */
+function showStreamOnDisplay(displayId: string, streamId: string) {
+    const current = displayStreams.get(displayId) ?? [];
+    if (!isMultiview(displayId)) return setDisplayStreams(displayId, [streamId]);
+    if (!current.includes(streamId)) setDisplayStreams(displayId, [...current, streamId]);
+}
+
+function removeStreamFromDisplay(displayId: string, streamId: string) {
+    const current = displayStreams.get(displayId) ?? [];
+    if (current.includes(streamId)) setDisplayStreams(displayId, current.filter((id) => id !== streamId));
+}
+
+/** Without multiview a display keeps only its newest stream. */
+function fitStreamsToLayout(displayId: string) {
+    const current = displayStreams.get(displayId) ?? [];
+    if (current.length > 1 && !isMultiview(displayId)) setDisplayStreams(displayId, current.slice(-1));
+}
+
+/** A new stream goes straight onto every display set to auto-show incoming streams. */
+function autoShowStream(streamId: string) {
+    const targets = displayConfigs.filter((conf) => conf.autoShowStreams);
+    for (const conf of targets) showStreamOnDisplay(conf.id, streamId);
+    if (targets.length > 0) emitAdminState();
 }
 
 /** A stream moved to a new streamer socket; displays showing it reconnect to the new one. */
-function reannounceStreamToDisplays(stream: StreamInfo) {
-    for (const [displayId, streamId] of displayActiveStream.entries()) {
-        if (streamId === stream.streamId) emitStreamIncoming(displayId, stream);
+function reannounceStreamToDisplays(streamId: string) {
+    for (const [displayId, streamIds] of displayStreams.entries()) {
+        if (streamIds.includes(streamId)) emitAssignedStreams(displayId);
     }
 }
 
@@ -328,36 +369,31 @@ function cleanupStream(streamId: string, streamerSocketId: string) {
     streams.delete(streamId);
     streamOwners.delete(streamId);
     socketToStream.delete(streamerSocketId);
-    for (const [viewerSocketId, watchedStreamId] of socketToWatchedStream.entries()) {
-        if (watchedStreamId === streamId) {
-            socketToWatchedStream.delete(viewerSocketId);
-        }
-    }
-    // Notify all displays showing this stream
-    for (const [displayId, sid] of displayActiveStream.entries()) {
-        if (sid === streamId) {
-            displayActiveStream.delete(displayId);
-            io?.to(displayRoom(displayId)).emit("stream:cleared");
-        }
-    }
+    for (const watched of socketToWatchedStreams.values()) watched.delete(streamId);
+    for (const displayId of [...displayStreams.keys()]) removeStreamFromDisplay(displayId, streamId);
     io?.emit("stream:ended", { streamId });
     emitAdminStreams();
+    emitAdminState();
 }
 
-/** Admins may preview any stream; a display may only watch the stream assigned to it. */
+/** Admins may preview any stream; a display may only watch the streams assigned to it. */
 function canWatchStream(role: SocketRole, displayId: string, streamId: string): boolean {
     if (role === "admin") return true;
-    if (role === "display") return displayActiveStream.get(displayId) === streamId;
+    if (role === "display") return displayStreams.get(displayId)?.includes(streamId) ?? false;
     return false;
+}
+
+function isWatching(viewerSocketId: string, streamId: string): boolean {
+    return socketToWatchedStreams.get(viewerSocketId)?.has(streamId) ?? false;
 }
 
 /** Signals may only flow between a streamer and a viewer watching that streamer's stream. */
 function canSignal(fromSocketId: string, toSocketId: string): boolean {
-    const watchedStreamId = socketToWatchedStream.get(fromSocketId);
-    if (watchedStreamId && streams.get(watchedStreamId)?.socketId === toSocketId) return true;
+    const toStreamId = socketToStream.get(toSocketId);
+    if (toStreamId && isWatching(fromSocketId, toStreamId)) return true;
 
     const ownStreamId = socketToStream.get(fromSocketId);
-    return !!ownStreamId && socketToWatchedStream.get(toSocketId) === ownStreamId;
+    return !!ownStreamId && isWatching(toSocketId, ownStreamId);
 }
 
 const app = next({ dev, turbopack: dev, hostname, port });
@@ -408,19 +444,7 @@ app.prepare().then(() => {
                 socket.emit("slide:show", enrichSlideData(displayStates[displayId]!));
             }
 
-            const activeStreamId = displayActiveStream.get(displayId);
-            if (activeStreamId) {
-                const stream = streams.get(activeStreamId);
-                if (stream) {
-                    socket.emit("stream:incoming", {
-                        streamId: stream.streamId,
-                        streamName: stream.name,
-                        streamSocketId: stream.socketId,
-                    });
-                } else {
-                    displayActiveStream.delete(displayId);
-                }
-            }
+            socket.emit("streams:assigned", { streams: getAssignedStreams(displayId) });
 
             const announcement = displayAnnouncements[displayId];
             if (announcement) {
@@ -543,13 +567,16 @@ app.prepare().then(() => {
                         uniqueConfigs.push({
                             id,
                             name: config.name || `Display ${id}`,
-                            activeBundle: existing?.activeBundle
+                            activeBundle: existing?.activeBundle,
+                            autoShowStreams: config.autoShowStreams === true,
+                            streamMultiview: config.streamMultiview === true,
                         });
                     }
                 }
                 displayConfigs = uniqueConfigs.length > 0 ? uniqueConfigs : [{ id: "1", name: "Display 1" }];
                 setDisplayConfigs(displayConfigs);
                 normalizeDisplayKeys();
+                for (const conf of displayConfigs) fitStreamsToLayout(conf.id);
                 emitAdminState();
                 emitDisplayStatesToAll();
             });
@@ -569,12 +596,14 @@ app.prepare().then(() => {
                 // A socket owns one stream; drop its previous one instead of orphaning it.
                 const previousStreamId = socketToStream.get(socket.id);
                 if (previousStreamId && previousStreamId !== data.streamId) cleanupStream(previousStreamId, socket.id);
+                const isNew = !existing;
                 const info: StreamInfo = { streamId: data.streamId, name: data.name, socketId: socket.id };
                 streams.set(data.streamId, info);
                 streamOwners.set(data.streamId, socket.data.username);
                 socketToStream.set(socket.id, data.streamId);
-                if (isTakeover) reannounceStreamToDisplays(info);
+                if (isTakeover) reannounceStreamToDisplays(info.streamId);
                 emitAdminStreams();
+                if (isNew) autoShowStream(info.streamId);
             });
 
             socket.on("stream:unregister", (data: { streamId: string }) => {
@@ -594,24 +623,15 @@ app.prepare().then(() => {
             if (!stream) return;
             if (!canWatchStream(role, displayId, data.streamId)) return;
 
-            const previousStreamId = socketToWatchedStream.get(socket.id);
-            if (previousStreamId && previousStreamId !== data.streamId) {
-                const previousStream = streams.get(previousStreamId);
-                if (previousStream) {
-                    io?.to(previousStream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
-                }
-            }
-
-            socketToWatchedStream.set(socket.id, data.streamId);
+            const watched = socketToWatchedStreams.get(socket.id) ?? new Set<string>();
+            watched.add(data.streamId);
+            socketToWatchedStreams.set(socket.id, watched);
             io?.to(stream.socketId).emit("stream:viewer:joined", { viewerSocketId: socket.id });
         });
 
         socket.on("stream:unwatch", (data: { streamId: string }) => {
             const stream = streams.get(data.streamId);
-            const watchedStreamId = socketToWatchedStream.get(socket.id);
-            if (watchedStreamId === data.streamId) {
-                socketToWatchedStream.delete(socket.id);
-            }
+            socketToWatchedStreams.get(socket.id)?.delete(data.streamId);
             if (!stream) return;
             io?.to(stream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
         });
@@ -625,25 +645,26 @@ app.prepare().then(() => {
             socket.on("stream:show", (data: { streamId: string; displayId: string }) => {
                 const stream = streams.get(data.streamId);
                 if (!stream) return;
-                const targetId = ensureDisplayId(data.displayId);
-                displayActiveStream.set(targetId, data.streamId);
-                emitStreamIncoming(targetId, stream);
+                showStreamOnDisplay(ensureDisplayId(data.displayId), stream.streamId);
+                emitAdminState();
             });
 
-            socket.on("stream:clear", (data: { displayId: string }) => {
+            // Without a streamId every stream leaves the display.
+            socket.on("stream:clear", (data: { displayId: string; streamId?: string }) => {
                 const targetId = ensureDisplayId(data.displayId);
-                displayActiveStream.delete(targetId);
-                io?.to(displayRoom(targetId)).emit("stream:cleared");
+                if (data.streamId) removeStreamFromDisplay(targetId, data.streamId);
+                else setDisplayStreams(targetId, []);
+                emitAdminState();
             });
         }
 
         socket.on("disconnect", () => {
-            const watchedStreamId = socketToWatchedStream.get(socket.id);
-            if (!watchedStreamId) return;
-            socketToWatchedStream.delete(socket.id);
-            const stream = streams.get(watchedStreamId);
-            if (stream) {
-                io?.to(stream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
+            const watched = socketToWatchedStreams.get(socket.id);
+            if (!watched) return;
+            socketToWatchedStreams.delete(socket.id);
+            for (const streamId of watched) {
+                const stream = streams.get(streamId);
+                if (stream) io?.to(stream.socketId).emit("stream:viewer:left", { viewerSocketId: socket.id });
             }
         });
     });

@@ -9,5 +9,6 @@
     "simpleCodingTimeTracker.health.modalNotifications": true,
     "simpleCodingTimeTracker.health.eyeRestInterval": 20,
     "simpleCodingTimeTracker.health.stretchInterval": 30,
-    "simpleCodingTimeTracker.health.breakThreshold": 90
+    "simpleCodingTimeTracker.health.breakThreshold": 90,
+    "python.terminal.useEnvFile": true
 }

@@ -181,7 +181,6 @@ export default function AdminDashboard() {
     const [dragOverSlide, setDragOverSlide] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [confirmActivateBundle, setConfirmActivateBundle] = useState<string | null>(null);
-    const [displayActiveStreams, setDisplayActiveStreams] = useState<Record<string, string>>({});
     const [globalSlidePickerOpen, setGlobalSlidePickerOpen] = useState(false);
     // null = closed; target "new" = adding a new media slide; a slide id = replacing that slide's file
     const [mediaSlidePicker, setMediaSlidePicker] = useState<MediaSlidePicker | null>(null);
@@ -990,19 +989,12 @@ export default function AdminDashboard() {
                         socketRef={socketRef}
                         displayConfigs={state.displayConfigs}
                         selectedDisplay={effectiveSelectedDisplay}
-                        displayActiveStreams={displayActiveStreams}
-                        onShowStream={(streamId, displayId) => {
-                            showStream(streamId, displayId);
-                            setDisplayActiveStreams((prev) => ({ ...prev, [displayId]: streamId }));
-                        }}
-                        onClearStream={(displayId) => {
-                            clearStream(displayId);
-                            setDisplayActiveStreams((prev) => {
-                                const next = { ...prev };
-                                delete next[displayId];
-                                return next;
-                            });
-                        }}
+                        displayActiveStreams={state.displayStreams ?? {}}
+                        onShowStream={showStream}
+                        onClearStream={clearStream}
+                        onDisplayOptionsChange={(displayId, options) => updateDisplayConfig(
+                            state.displayConfigs.map((conf) => conf.id === displayId ? { ...conf, ...options } : conf)
+                        )}
                     />
                 </div>
             ),

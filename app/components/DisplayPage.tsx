@@ -3,21 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { ActiveSlide, useSocket } from "../hooks/useSocket";
+import { DisplayStream, useDisplayStreams } from "../hooks/useDisplayStreams";
 import { BundleMeta } from "../interfaces/BundleMeta";
 import { DEFAULT_TRANSITION } from "../lib/transitions";
 import SlideTransition from "./SlideTransition";
 
 const DisplaySlide = dynamic(() => import("./DisplaySlide"), { ssr: false });
-
-const PC_CONFIG: RTCConfiguration = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
-
-interface ActiveStream {
-    streamId: string;
-    streamName: string;
-    streamSocketId: string;
-}
 
 interface Announcement {
     line1: string;
@@ -51,24 +42,47 @@ function toggleFullscreen() {
     }
 }
 
+function StreamVideo({ mediaStream }: { mediaStream: MediaStream | null }) {
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        if (videoRef.current) videoRef.current.srcObject = mediaStream;
+    }, [mediaStream]);
+
+    return <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain" />;
+}
+
+/** As square as possible: 2 streams side by side, 3–4 as 2×2, 5–6 as 3×2 and so on. */
+function gridColumnsFor(count: number): number {
+    return Math.ceil(Math.sqrt(count));
+}
+
+function StreamGrid({ streams }: { streams: DisplayStream[] }) {
+    const columns = gridColumnsFor(streams.length);
+    const rows = Math.ceil(streams.length / columns);
+    return (
+        <div
+            className="absolute inset-0 z-50 bg-black grid"
+            style={{ gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
+        >
+            {streams.map((stream) => (
+                <div key={stream.streamId} className="min-w-0 min-h-0">
+                    <StreamVideo mediaStream={stream.mediaStream} />
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
     const defer = (fn: () => void) => queueMicrotask(fn);
     const { state, bundleMetaUpdate, socketRef, connected } = useSocket("display", displayId);
     const [shown, setShown] = useState<ShownSlide>(STANDBY);
     const loadSeqRef = useRef(0);
-
-    // WebRTC stream state
-    const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
-    const activeStreamRef = useRef<ActiveStream | null>(null);
-    const streamVideoRef = useRef<HTMLVideoElement>(null);
-    const pcRef = useRef<RTCPeerConnection | null>(null);
+    const streams = useDisplayStreams(socketRef);
 
     // Lower-third announcement overlay
     const [announcement, setAnnouncement] = useState<Announcement | null>(null);
-
-    useEffect(() => {
-        activeStreamRef.current = activeStream;
-    }, [activeStream]);
 
     // Slide loading
     useEffect(() => {
@@ -125,81 +139,6 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
         )));
     }, [bundleMetaUpdate]);
 
-    // WebRTC stream handling
-    useEffect(() => {
-        const socket = socketRef.current;
-        if (!socket) return;
-
-        function teardown() {
-            const currentStream = activeStreamRef.current;
-            if (currentStream) {
-                socket?.emit("stream:unwatch", { streamId: currentStream.streamId });
-            }
-            pcRef.current?.close();
-            pcRef.current = null;
-            if (streamVideoRef.current) streamVideoRef.current.srcObject = null;
-            activeStreamRef.current = null;
-            setActiveStream(null);
-        }
-
-        function onStreamIncoming(data: ActiveStream) {
-            teardown();
-            activeStreamRef.current = data;
-            setActiveStream(data);
-
-            const pc = new RTCPeerConnection(PC_CONFIG);
-            pcRef.current = pc;
-
-            pc.ontrack = (e) => {
-                const ms = e.streams[0] ?? new MediaStream([e.track]);
-                if (streamVideoRef.current) streamVideoRef.current.srcObject = ms;
-            };
-
-            const sock = socketRef.current;
-            pc.onicecandidate = (e) => {
-                if (e.candidate) {
-                    sock?.emit("stream:signal", {
-                        to: data.streamSocketId,
-                        data: { type: "candidate", candidate: e.candidate },
-                    });
-                }
-            };
-
-            sock?.emit("stream:watch", { streamId: data.streamId });
-        }
-
-        function onStreamSignal({ from, data: sigData }: { from: string; data: RTCSessionDescriptionInit | { type: "candidate"; candidate: RTCIceCandidateInit } }) {
-            const pc = pcRef.current;
-            if (!pc) return;
-            if (sigData.type === "offer") {
-                pc.setRemoteDescription(new RTCSessionDescription(sigData as RTCSessionDescriptionInit))
-                    .then(() => pc.createAnswer())
-                    .then((answer) => pc.setLocalDescription(answer))
-                    .then(() => {
-                        socketRef.current?.emit("stream:signal", { to: from, data: pc.localDescription });
-                    });
-            } else if (sigData.type === "candidate" && "candidate" in sigData && sigData.candidate) {
-                pc.addIceCandidate(new RTCIceCandidate(sigData.candidate));
-            }
-        }
-
-        function onStreamCleared() { teardown(); }
-        function onStreamEnded() { teardown(); }
-
-        socket.on("stream:incoming", onStreamIncoming);
-        socket.on("stream:signal", onStreamSignal);
-        socket.on("stream:cleared", onStreamCleared);
-        socket.on("stream:ended", onStreamEnded);
-
-        return () => {
-            socket.off("stream:incoming", onStreamIncoming);
-            socket.off("stream:signal", onStreamSignal);
-            socket.off("stream:cleared", onStreamCleared);
-            socket.off("stream:ended", onStreamEnded);
-            teardown();
-        };
-    }, [connected, socketRef]); // re-run when socket connects/reconnects
-
     // Lower-third announcement handling
     useEffect(() => {
         const socket = socketRef.current;
@@ -219,7 +158,7 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
 
     return (
         <div className="display-root" onDoubleClick={toggleFullscreen}>
-            {!shown.slide && !activeStream && (
+            {!shown.slide && streams.length === 0 && (
                 <div className="display-standby">
                     <span className="display-standby-text">Standby</span>
                 </div>
@@ -235,16 +174,7 @@ export default function DisplayPage({ displayId = "1" }: DisplayPageProps) {
                     announcementActive={!!announcement && (!!announcement.line1 || !!announcement.line2)}
                 />
             </SlideTransition>
-            {activeStream && (
-                <div className="absolute inset-0 z-50 bg-black flex items-center justify-center">
-                    <video
-                        ref={streamVideoRef}
-                        autoPlay
-                        playsInline
-                        className="w-full h-full object-contain"
-                    />
-                </div>
-            )}
+            {streams.length > 0 && <StreamGrid streams={streams} />}
             {announcement && (announcement.line1 || announcement.line2) && (
                 <div className="lower-third" style={{ background: announcement.color }}>
                     {announcement.line1 && <div className="lower-third-line">{announcement.line1}</div>}
